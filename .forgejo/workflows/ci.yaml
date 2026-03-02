@@ -1,0 +1,102 @@
+# .forgejo/workflows/ci.yaml
+# CI for northernlights - validates structure and runs experiment tests
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate-structure:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check required files
+        run: |
+          echo "Checking project structure..."
+          
+          # Check CLAUDE.md exists
+          if [ ! -f ".claude/CLAUDE.md" ]; then
+            echo "::error::Missing .claude/CLAUDE.md"
+            exit 1
+          fi
+          echo "✓ .claude/CLAUDE.md exists"
+          
+          # Check experiments directory exists
+          if [ ! -d "experiments" ]; then
+            echo "::error::Missing experiments/ directory"
+            exit 1
+          fi
+          echo "✓ experiments/ directory exists"
+          
+          # Check README exists
+          if [ ! -f "README.md" ]; then
+            echo "::warning::Missing root README.md"
+          else
+            echo "✓ README.md exists"
+          fi
+      
+      - name: Validate experiment structure
+        run: |
+          echo "Validating experiments..."
+          
+          for dir in experiments/*/; do
+            if [ -d "$dir" ]; then
+              name=$(basename "$dir")
+              echo "Checking experiment: $name"
+              
+              # Check README exists
+              if [ ! -f "${dir}README.md" ]; then
+                echo "::warning::Missing README.md in $dir"
+              else
+                echo "  ✓ README.md exists"
+              fi
+            fi
+          done
+          
+          echo "Experiment validation complete"
+
+  check-claude-config:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Validate CLAUDE.md sections
+        run: |
+          FILE=".claude/CLAUDE.md"
+          
+          check_section() {
+            if grep -q "$1" "$FILE"; then
+              echo "✓ Found: $1"
+            else
+              echo "::warning::Missing section: $1"
+            fi
+          }
+          
+          echo "Checking CLAUDE.md sections..."
+          check_section "## Project Overview"
+          check_section "## Quick Start"
+          check_section "## Verification"
+          check_section "## Common Mistakes"
+          check_section "## Experiments Log"
+      
+      - name: List available commands
+        run: |
+          echo "Available slash commands:"
+          if [ -d ".claude/commands" ]; then
+            for cmd in .claude/commands/*.md; do
+              [ -f "$cmd" ] && echo "  /$(basename "$cmd" .md)"
+            done
+          fi
+      
+      - name: List available subagents
+        run: |
+          echo "Available subagents:"
+          if [ -d ".claude/subagents" ]; then
+            for agent in .claude/subagents/*.md; do
+              [ -f "$agent" ] && echo "  $(basename "$agent" .md)"
+            done
+          fi

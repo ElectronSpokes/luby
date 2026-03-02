@@ -1,0 +1,110 @@
+# .forgejo/workflows/pr-check.yaml
+# PR-specific checks and validations
+
+name: PR Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  pr-validation:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR title format
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $PR_TITLE"
+
+          # Check for conventional commit format (optional but recommended)
+          if echo "$PR_TITLE" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|ci|perf|build)(\(.+\))?: .+"; then
+            echo "✓ PR title follows conventional commit format"
+          else
+            echo "::warning::PR title doesn't follow conventional commit format"
+            echo "  Recommended: type(scope): description"
+            echo "  Examples: feat(ci): add PR checks, fix: resolve build error"
+          fi
+
+      - name: Check PR description
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+
+          if [ -z "$PR_BODY" ] || [ "$PR_BODY" = "null" ]; then
+            echo "::warning::PR description is empty"
+          else
+            echo "✓ PR has description"
+
+            # Check for checklist items
+            if echo "$PR_BODY" | grep -q "\[.\]"; then
+              echo "✓ PR has checklist items"
+            fi
+          fi
+
+      - name: Analyze changed files
+        run: |
+          echo "Changed files in this PR:"
+          git diff --name-only origin/${{ github.base_ref }}...HEAD | head -50
+
+          echo ""
+          echo "Summary:"
+
+          # Check for experiment changes
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "^experiments/"; then
+            echo "📁 Contains experiment changes"
+
+            # Verify new experiments have README
+            for dir in $(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep "^experiments/" | cut -d'/' -f1-2 | sort -u); do
+              if [ -d "$dir" ] && [ ! -f "$dir/README.md" ]; then
+                echo "::error::New experiment $dir is missing README.md"
+                exit 1
+              fi
+            done
+          fi
+
+          # Check for workflow changes
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "^.forgejo/workflows/"; then
+            echo "⚙️  Contains workflow changes"
+          fi
+
+          # Check for Claude config changes
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "^.claude/"; then
+            echo "🤖 Contains Claude configuration changes"
+          fi
+
+      - name: Check commit count
+        run: |
+          COMMIT_COUNT=$(git rev-list --count origin/${{ github.base_ref }}...HEAD)
+          echo "Number of commits: $COMMIT_COUNT"
+
+          if [ "$COMMIT_COUNT" -gt 10 ]; then
+            echo "::warning::PR has many commits ($COMMIT_COUNT). Consider squashing before merge."
+          fi
+
+  diff-check:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for merge conflicts markers
+        run: |
+          if git diff origin/${{ github.base_ref }}...HEAD | grep -E "^[<>=]{7}"; then
+            echo "::error::Found merge conflict markers in changes"
+            exit 1
+          fi
+          echo "✓ No merge conflict markers found"
+
+      - name: Check for debug statements
+        run: |
+          PATTERNS="console\.log|debugger|TODO|FIXME|HACK"
+
+          if git diff origin/${{ github.base_ref }}...HEAD | grep -E "$PATTERNS" | grep "^+" | head -10; then
+            echo "::warning::Found debug statements or TODOs in new code (see above)"
+          else
+            echo "✓ No obvious debug statements found"
+          fi

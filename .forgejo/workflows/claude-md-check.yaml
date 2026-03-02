@@ -1,0 +1,76 @@
+# .forgejo/workflows/claude-md-check.yaml
+# Validates CLAUDE.md when it changes
+
+name: CLAUDE.md Check
+
+on:
+  push:
+    paths:
+      - '.claude/**'
+  pull_request:
+    paths:
+      - '.claude/**'
+
+jobs:
+  validate:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check CLAUDE.md exists
+        run: |
+          if [ ! -f ".claude/CLAUDE.md" ]; then
+            echo "::error::Missing .claude/CLAUDE.md"
+            exit 1
+          fi
+          echo "✓ CLAUDE.md found"
+      
+      - name: Check required sections
+        run: |
+          FILE=".claude/CLAUDE.md"
+          ERRORS=0
+          
+          check_required() {
+            if ! grep -q "$1" "$FILE"; then
+              echo "::error::CLAUDE.md missing required section: $1"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "✓ Found: $1"
+            fi
+          }
+          
+          check_required "## Project Overview"
+          check_required "## Verification"
+          check_required "## Common Mistakes"
+          
+          if [ $ERRORS -gt 0 ]; then
+            exit 1
+          fi
+      
+      - name: Check settings.json
+        run: |
+          if [ ! -f ".claude/settings.json" ]; then
+            echo "::warning::Missing .claude/settings.json"
+          else
+            echo "✓ settings.json found"
+            # Validate JSON syntax
+            if ! python3 -m json.tool .claude/settings.json > /dev/null 2>&1; then
+              echo "::error::settings.json is not valid JSON"
+              exit 1
+            fi
+            echo "✓ settings.json is valid JSON"
+          fi
+      
+      - name: Check hooks are executable
+        run: |
+          if [ -d ".claude/hooks" ]; then
+            for hook in .claude/hooks/*.sh; do
+              if [ -f "$hook" ]; then
+                if [ ! -x "$hook" ]; then
+                  echo "::warning::Hook not executable: $hook"
+                else
+                  echo "✓ Hook executable: $hook"
+                fi
+              fi
+            done
+          fi
