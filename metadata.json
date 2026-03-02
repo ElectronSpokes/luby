@@ -1,0 +1,5 @@
+{
+  "name": "Vitality Wellness",
+  "description": "A comprehensive health companion for food logging, hydration tracking, movement, and fasting management.",
+  "requestFramePermissions": ["camera", "microphone"]
+}
