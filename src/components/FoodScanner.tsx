@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Camera, X, Sparkles, Loader2, Check } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { api } from '../lib/api';
 import { motion, AnimatePresence } from 'motion/react';
 import { FoodEntry } from '../types';
 
@@ -55,47 +55,12 @@ export const FoodScanner: React.FC<FoodScannerProps> = ({ onFoodDetected, onClos
   const analyzeImage = async (base64Image: string) => {
     setIsAnalyzing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       const base64Data = base64Image.split(',')[1];
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          {
-            parts: [
-              { text: "Identify the food in this image and provide its nutritional information. Return the data in JSON format." },
-              {
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: base64Data
-                }
-              }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              calories: { type: Type.NUMBER },
-              protein: { type: Type.NUMBER },
-              fiber: { type: Type.NUMBER },
-              carbs: { type: Type.NUMBER },
-              fat: { type: Type.NUMBER },
-              sugar: { type: Type.NUMBER }
-            },
-            required: ["name", "calories", "protein", "fiber", "carbs", "fat", "sugar"]
-          }
-        }
-      });
-
-      const result = JSON.parse(response.text || "{}");
+      const result = await api.scanFood(base64Data, 'image/jpeg');
       onFoodDetected(result);
     } catch (err) {
-      console.error("Error analyzing image:", err);
-      alert("Failed to analyze image. Please try again.");
+      console.error('Error analyzing image:', err);
+      alert('Failed to analyze image. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }

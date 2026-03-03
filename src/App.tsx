@@ -33,13 +33,16 @@ import {
   YAxis, 
   Tooltip 
 } from 'recharts';
-import { GoogleGenAI, Type } from "@google/genai";
+// GoogleGenAI moved server-side
 import { cn } from './lib/utils';
 import { FoodEntry, HydrationEntry, MovementEntry, FastingSession, DailyStats, CoachingPlan } from './types';
 import { FoodScanner } from './components/FoodScanner';
 import { MenuPlanner } from './components/MenuPlanner';
 import { Recipes } from './components/Recipes';
 import { AIAssistant } from './components/AIAssistant';
+import { LoginPage } from './components/LoginPage';
+import { useAuth } from './lib/useAuth';
+import { api } from './lib/api';
 
 // --- Components ---
 // ... (CoachingView, AIInsight, StatCard, LubyMascot, WeightLossScore components)
@@ -51,40 +54,10 @@ const CoachingView = ({ stats, foodEntries, movementEntries }: { stats: DailySta
   const generatePlan = async () => {
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Based on the user's recent health data:
-        Today's stats: ${stats.calories}kcal, ${stats.protein}g protein, ${stats.fiber}g fiber, ${stats.sugar}g sugar, ${stats.water}ml water, ${stats.movementMinutes}min movement.
-        Recent meals: ${foodEntries.slice(-3).map(f => f.name).join(', ')}.
-        Recent activities: ${movementEntries.slice(-3).map(m => m.type).join(', ')}.
-        Generate a personalized daily coaching plan with 3 actionable steps for healthy eating and 3 actionable steps for movement.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              date: { type: Type.STRING },
-              focus: { type: Type.STRING, description: "A short focus theme for the day" },
-              eatingSteps: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "3 specific, actionable eating steps"
-              },
-              movementSteps: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "3 specific, actionable movement steps"
-              }
-            },
-            required: ["date", "focus", "eatingSteps", "movementSteps"]
-          }
-        }
-      });
-      
-      const parsed = JSON.parse(response.text || "{}");
+      const parsed = await api.generateCoachingPlan(stats);
+      parsed.date = parsed.date || format(new Date(), 'yyyy-MM-dd');
       setPlan(parsed);
-      localStorage.setItem('vitality_coaching_plan', JSON.stringify(parsed));
+      await api.saveCoaching({ date: parsed.date, focus: parsed.focus, eatingSteps: parsed.eatingSteps, movementSteps: parsed.movementSteps });
     } catch (e) {
       console.error("Failed to generate plan", e);
     } finally {
@@ -93,17 +66,14 @@ const CoachingView = ({ stats, foodEntries, movementEntries }: { stats: DailySta
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem('vitality_coaching_plan');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.date === format(new Date(), 'yyyy-MM-dd')) {
-        setPlan(parsed);
+    const today = format(new Date(), 'yyyy-MM-dd');
+    api.getCoaching(today).then(plan => {
+      if (plan && plan.date === today) {
+        setPlan({ date: plan.date, focus: plan.focus, eatingSteps: plan.eating_steps || plan.eatingSteps || [], movementSteps: plan.movement_steps || plan.movementSteps || [] });
       } else {
         generatePlan();
       }
-    } else {
-      generatePlan();
-    }
+    }).catch(() => generatePlan());
   }, []);
 
   return (
@@ -330,12 +300,8 @@ const AIInsight = ({ stats }: { stats: DailyStats }) => {
   const getInsight = async () => {
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Based on today's health stats: ${stats.calories}kcal, ${stats.protein}g protein, ${stats.fiber}g fiber, ${stats.sugar}g sugar, ${stats.water}ml water, ${stats.movementMinutes}min movement. Give a 1-sentence encouraging health tip.`,
-      });
-      setInsight(response.text || "Keep up the great work!");
+      const result = await api.generateInsight(stats);
+      setInsight(result.insight || "Keep up the great work! Every healthy choice counts.");
     } catch (e) {
       setInsight("Stay hydrated and keep moving!");
     } finally {
@@ -390,6 +356,24 @@ const StatCard = ({ title, value, unit, icon: Icon, color, progress }: any) => (
 );
 
 export default function App() {
+  const { user, loading: authLoading, login, logout } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-violet-950 via-slate-900 to-violet-900 flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-violet-400 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage onLogin={login} />;
+  }
+
+  return <AppContent user={user} onLogout={logout} />;
+}
+
+function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [foodEntries, setFoodEntries] = useState<FoodEntry[]>([]);
   const [hydrationEntries, setHydrationEntries] = useState<HydrationEntry[]>([]);
@@ -398,26 +382,28 @@ export default function App() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   
-  // Load data
+  // Load data from API
   useEffect(() => {
-    const savedFood = localStorage.getItem('vitality_food');
-    const savedHydration = localStorage.getItem('vitality_hydration');
-    const savedMovement = localStorage.getItem('vitality_movement');
-    const savedFasting = localStorage.getItem('vitality_fasting');
-    
-    if (savedFood) setFoodEntries(JSON.parse(savedFood));
-    if (savedHydration) setHydrationEntries(JSON.parse(savedHydration));
-    if (savedMovement) setMovementEntries(JSON.parse(savedMovement));
-    if (savedFasting) setFastingSessions(JSON.parse(savedFasting));
+    const loadData = async () => {
+      try {
+        const [food, hydration, movement, fasting] = await Promise.all([
+          api.getFood(),
+          api.getHydration(),
+          api.getMovement(),
+          api.getFasting(),
+        ]);
+        setFoodEntries(food.map((e: any) => ({ ...e, timestamp: Number(e.timestamp) })));
+        setHydrationEntries(hydration.map((e: any) => ({ ...e, timestamp: Number(e.timestamp) })));
+        setMovementEntries(movement.map((e: any) => ({ ...e, timestamp: Number(e.timestamp), duration: Number(e.duration) })));
+        setFastingSessions(fasting.map((e: any) => ({ ...e, startTime: Number(e.start_time || e.startTime), endTime: e.end_time ? Number(e.end_time) : undefined, targetDuration: Number(e.target_duration || e.targetDuration) })));
+      } catch (err) {
+        console.error('Failed to load data:', err);
+      }
+    };
+    loadData();
   }, []);
 
-  // Save data
-  useEffect(() => {
-    localStorage.setItem('vitality_food', JSON.stringify(foodEntries));
-    localStorage.setItem('vitality_hydration', JSON.stringify(hydrationEntries));
-    localStorage.setItem('vitality_movement', JSON.stringify(movementEntries));
-    localStorage.setItem('vitality_fasting', JSON.stringify(fastingSessions));
-  }, [foodEntries, hydrationEntries, movementEntries, fastingSessions]);
+  // Data saved to API on each operation (no localStorage)
 
   const todayStats: DailyStats = {
     calories: foodEntries.filter(e => isToday(e.timestamp)).reduce((acc, curr) => acc + curr.calories, 0),
@@ -571,8 +557,9 @@ export default function App() {
                           </div>
                           <button 
                             onClick={() => {
-                              const updated = fastingSessions.map(s => s.id === activeFasting.id ? { ...s, status: 'completed', endTime: Date.now() } : s);
-                              setFastingSessions(updated as FastingSession[]);
+                              api.completeFasting(activeFasting.id).then(saved => {
+                                setFastingSessions(prev => prev.map(s => s.id === activeFasting.id ? { ...s, status: 'completed', endTime: Date.now() } : s));
+                              });
                             }}
                             className="bg-white text-slate-900 px-8 py-3 rounded-2xl font-bold hover:bg-slate-100 transition-colors"
                           >
@@ -584,13 +571,9 @@ export default function App() {
                           <p className="text-slate-400 mb-6">Ready to start your next fast?</p>
                           <button 
                             onClick={() => {
-                              const newFast: FastingSession = {
-                                id: Math.random().toString(36).substr(2, 9),
-                                startTime: Date.now(),
-                                targetDuration: 16,
-                                status: 'active'
-                              };
-                              setFastingSessions([...fastingSessions, newFast]);
+                              api.startFasting({ startTime: Date.now(), targetDuration: 16 }).then(saved => {
+                                setFastingSessions(prev => [...prev, { ...saved, startTime: Number(saved.start_time || saved.startTime), targetDuration: Number(saved.target_duration || saved.targetDuration) }]);
+                              });
                             }}
                             className="bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold hover:bg-emerald-600 transition-colors"
                           >
@@ -701,8 +684,7 @@ export default function App() {
                 <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={(e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
-                  const newEntry: FoodEntry = {
-                    id: Math.random().toString(36).substr(2, 9),
+                  const entry = {
                     name: formData.get('name') as string,
                     calories: Number(formData.get('calories')),
                     protein: Number(formData.get('protein')),
@@ -712,7 +694,7 @@ export default function App() {
                     sugar: Number(formData.get('sugar')),
                     timestamp: Date.now()
                   };
-                  setFoodEntries([...foodEntries, newEntry]);
+                  api.addFood(entry).then(saved => setFoodEntries(prev => [...prev, { ...saved, timestamp: Number(saved.timestamp) }]));
                   (e.target as HTMLFormElement).reset();
                 }}>
                   <div className="space-y-2">

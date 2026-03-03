@@ -11,7 +11,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import { Recipe } from '../types';
 
@@ -21,45 +21,20 @@ export const Recipes: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const searchRecipes = async (query: string) => {
-    if (!query) return;
-    setIsSearching(true);
+  const searchRecipes = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Generate 3 healthy recipes for: ${query}. Include nutritional info (calories, protein, fiber, carbs, fat, sugar), ingredients, and instructions.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                name: { type: Type.STRING },
-                description: { type: Type.STRING },
-                ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-                instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                calories: { type: Type.NUMBER },
-                protein: { type: Type.NUMBER },
-                fiber: { type: Type.NUMBER },
-                carbs: { type: Type.NUMBER },
-                fat: { type: Type.NUMBER },
-                sugar: { type: Type.NUMBER }
-              },
-              required: ["name", "description", "ingredients", "instructions", "calories", "protein", "fiber", "carbs", "fat", "sugar"]
-            }
-          }
-        }
-      });
-
-      const result = JSON.parse(response.text || "[]");
-      setRecipes(result.map((r: any) => ({ ...r, id: Math.random().toString(36).substr(2, 9) })));
-    } catch (err) {
-      console.error("Error searching recipes:", err);
+      const result = await api.searchRecipes(query);
+      const recipes = (result.recipes || []).map((r: any) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        ...r,
+      }));
+      setResults(recipes);
+    } catch (e) {
+      console.error("Failed to search recipes", e);
     } finally {
-      setIsSearching(false);
+      setLoading(false);
     }
   };
 

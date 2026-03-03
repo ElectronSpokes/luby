@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
+import { api } from '../lib/api';
 import { ChatMessage } from '../types';
 import { cn } from '../lib/utils';
 
@@ -60,7 +61,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, userStats }) 
     setIsTyping(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const { apiKey } = await api.getLiveToken();
+      const ai = new GoogleGenAI({ apiKey });
       const chat = ai.chats.create({
         model: "gemini-3-flash-preview",
         config: {
@@ -92,7 +94,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, userStats }) 
     setTranscription('Connecting to Luby...');
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const { apiKey } = await api.getLiveToken();
+      const ai = new GoogleGenAI({ apiKey });
       
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       

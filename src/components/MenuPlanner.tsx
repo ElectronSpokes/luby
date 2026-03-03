@@ -12,7 +12,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import { MealPlan, ShoppingItem, Recipe } from '../types';
 
@@ -37,62 +37,30 @@ export const MenuPlanner: React.FC = () => {
   }, [mealPlans, shoppingList]);
 
   const generateWeeklyPlan = async () => {
-    setIsGenerating(true);
+    setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: "Generate a healthy weekly meal plan for 7 days (Monday-Sunday). For each day, provide breakfast, lunch, and dinner. Also generate a combined shopping list of ingredients needed for all these meals.",
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              plans: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    day: { type: Type.STRING },
-                    meals: {
-                      type: Type.OBJECT,
-                      properties: {
-                        breakfast: { type: Type.STRING },
-                        lunch: { type: Type.STRING },
-                        dinner: { type: Type.STRING }
-                      }
-                    }
-                  }
-                }
-              },
-              shoppingList: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    category: { type: Type.STRING }
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      const result = JSON.parse(response.text || "{}");
-      if (result.plans) setMealPlans(result.plans);
-      if (result.shoppingList) {
-        setShoppingList(result.shoppingList.map((item: any) => ({
-          ...item,
+      const result = await api.generateMealPlan();
+      if (result.plans) {
+        const plans = result.plans.map((p: any, i: number) => ({
           id: Math.random().toString(36).substr(2, 9),
-          checked: false
-        })));
+          day: p.day,
+          meals: p.meals || {},
+        }));
+        setMealPlans(plans);
       }
-    } catch (err) {
-      console.error("Error generating plan:", err);
+      if (result.shoppingList) {
+        const items = result.shoppingList.map((s: any) => ({
+          id: Math.random().toString(36).substr(2, 9),
+          name: s.name,
+          category: s.category || '',
+          checked: false,
+        }));
+        setShoppingList(items);
+      }
+    } catch (e) {
+      console.error("Failed to generate plan", e);
     } finally {
-      setIsGenerating(false);
+      setLoading(false);
     }
   };
 
