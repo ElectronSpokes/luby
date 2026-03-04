@@ -64,7 +64,6 @@ authRoutes.get('/login', async (c) => {
   authUrl.searchParams.set('nonce', nonce);
 
   if (isMobile) {
-    authUrl.searchParams.set('prompt', 'login');
   }
 
   return c.redirect(authUrl.toString());
