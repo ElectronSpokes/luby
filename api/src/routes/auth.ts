@@ -7,6 +7,17 @@ import type { AppEnv } from '../types';
 
 export const authRoutes = new Hono<AppEnv>();
 
+// Server-side state store for mobile OAuth (cookies don't work in system browser)
+const mobileOAuthStore = new Map<string, { nonce: string; createdAt: number }>();
+
+// Clean up expired entries (older than 5 minutes)
+function cleanupMobileStore() {
+  const now = Date.now();
+  for (const [key, val] of mobileOAuthStore) {
+    if (now - val.createdAt > 300_000) mobileOAuthStore.delete(key);
+  }
+}
+
 // Apply auth middleware to /me endpoint
 authRoutes.use('/me', authMiddleware);
 
@@ -21,21 +32,28 @@ authRoutes.get('/login', async (c) => {
     ? `${config.apiBaseUrl}/api/v1/auth/callback/mobile`
     : `${config.apiBaseUrl}/api/v1/auth/callback`;
 
-  setCookie(c, 'oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Lax',
-    maxAge: 300,
-    path: '/',
-  });
+  if (isMobile) {
+    // Store state server-side for mobile (system browser can't share cookies)
+    cleanupMobileStore();
+    mobileOAuthStore.set(state, { nonce, createdAt: Date.now() });
+  } else {
+    // Web: use cookies as before
+    setCookie(c, 'oauth_state', state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      maxAge: 300,
+      path: '/',
+    });
 
-  setCookie(c, 'oauth_nonce', nonce, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Lax',
-    maxAge: 300,
-    path: '/',
-  });
+    setCookie(c, 'oauth_nonce', nonce, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      maxAge: 300,
+      path: '/',
+    });
+  }
 
   const authUrl = new URL('https://auth.theflux.life/application/o/authorize/');
   authUrl.searchParams.set('client_id', config.clientId);
@@ -89,7 +107,6 @@ authRoutes.get('/callback', async (c) => {
       expires_in: number;
     };
 
-    // Verify ID token — reuse cached JWKS from middleware
     const jwks = await getJwks();
     const { payload } = await jose.jwtVerify(tokens.id_token, jwks, {
       issuer: config.issuer,
@@ -100,7 +117,6 @@ authRoutes.get('/callback', async (c) => {
       return c.json({ error: 'Invalid nonce' }, 400);
     }
 
-    // Upsert user on login (not on every request)
     await upsertUser({
       type: 'human',
       sub: payload.sub,
@@ -109,7 +125,6 @@ authRoutes.get('/callback', async (c) => {
       preferred_username: payload.preferred_username as string | undefined,
     });
 
-    // Set session cookie
     setCookie(c, 'luby_session', tokens.access_token, {
       httpOnly: true,
       secure: true,
@@ -119,7 +134,6 @@ authRoutes.get('/callback', async (c) => {
       path: '/',
     });
 
-    // Clear OAuth cookies
     setCookie(c, 'oauth_state', '', { maxAge: 0, path: '/' });
     setCookie(c, 'oauth_nonce', '', { maxAge: 0, path: '/' });
 
@@ -135,16 +149,17 @@ authRoutes.get('/callback/mobile', async (c) => {
   const config = getConfig();
   const code = c.req.query('code');
   const state = c.req.query('state');
-  const storedState = getCookie(c, 'oauth_state');
-  const storedNonce = getCookie(c, 'oauth_nonce');
 
   if (!code || !state) {
     return c.json({ error: 'Missing code or state' }, 400);
   }
 
-  if (state !== storedState) {
-    return c.json({ error: 'Invalid state' }, 400);
+  // Look up state from server-side store (not cookies)
+  const stored = mobileOAuthStore.get(state);
+  if (!stored) {
+    return c.json({ error: 'Invalid or expired state' }, 400);
   }
+  mobileOAuthStore.delete(state);
 
   try {
     const tokenResponse = await fetch('https://auth.theflux.life/application/o/token/', {
@@ -171,18 +186,16 @@ authRoutes.get('/callback/mobile', async (c) => {
       expires_in: number;
     };
 
-    // Verify ID token
     const jwks = await getJwks();
     const { payload } = await jose.jwtVerify(tokens.id_token, jwks, {
       issuer: config.issuer,
       audience: config.clientId,
     });
 
-    if (!storedNonce || payload.nonce !== storedNonce) {
+    if (payload.nonce !== stored.nonce) {
       return c.json({ error: 'Invalid nonce' }, 400);
     }
 
-    // Upsert user on login
     await upsertUser({
       type: 'human',
       sub: payload.sub,
@@ -190,10 +203,6 @@ authRoutes.get('/callback/mobile', async (c) => {
       name: payload.name as string | undefined,
       preferred_username: payload.preferred_username as string | undefined,
     });
-
-    // Clear OAuth cookies
-    setCookie(c, 'oauth_state', '', { maxAge: 0, path: '/' });
-    setCookie(c, 'oauth_nonce', '', { maxAge: 0, path: '/' });
 
     // Redirect to mobile app via deep link with the access token
     const deepLink = `net.myluby.app://auth/callback?token=${encodeURIComponent(tokens.access_token)}&expires_in=${tokens.expires_in}`;
