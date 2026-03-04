@@ -23,7 +23,7 @@ export async function generateCoachingPlan(stats: {
 }) {
   const client = getAI();
   const response = await client.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: `Based on today's health stats, create a personalized coaching plan.
 Stats: Calories: ${stats.calories}, Protein: ${stats.protein}g, Fiber: ${stats.fiber}g, Sugar: ${stats.sugar}g, Water: ${stats.water}ml, Movement: ${stats.movementMinutes} minutes.
 Create specific, actionable steps.`,
@@ -54,7 +54,7 @@ export async function generateInsight(stats: {
 }) {
   const client = getAI();
   const response = await client.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: `Based on these health stats, give ONE short encouraging tip (1-2 sentences max).
 Calories: ${stats.calories}, Protein: ${stats.protein}g, Fiber: ${stats.fiber}g, Sugar: ${stats.sugar}g, Water: ${stats.water}ml, Movement: ${stats.movementMinutes}min.`,
   });
@@ -65,7 +65,7 @@ Calories: ${stats.calories}, Protein: ${stats.protein}g, Fiber: ${stats.fiber}g,
 export async function scanFood(imageBase64: string, mimeType: string) {
   const client = getAI();
   const response = await client.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: [
       {
         role: 'user',
@@ -106,7 +106,7 @@ export async function scanFood(imageBase64: string, mimeType: string) {
 export async function generateMealPlan(preferences?: string) {
   const client = getAI();
   const response = await client.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: `Generate a 7-day healthy meal plan${preferences ? ` with these preferences: ${preferences}` : ''}. Include breakfast, lunch, dinner, and an optional snack for each day. Also generate a combined shopping list grouped by category.`,
     config: {
       responseMimeType: 'application/json',
@@ -153,7 +153,7 @@ export async function generateMealPlan(preferences?: string) {
 export async function searchRecipes(query: string) {
   const client = getAI();
   const response = await client.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: `Search for 3 recipes matching: "${query}". For each recipe, include name, description, ingredients list, step-by-step instructions, and full nutritional breakdown per serving.`,
     config: {
       responseMimeType: 'application/json',
@@ -196,7 +196,7 @@ export async function chatWithLuby(messages: Array<{ role: string; content: stri
 Current user stats today: Calories: ${stats.calories}, Protein: ${stats.protein}g, Fiber: ${stats.fiber}g, Sugar: ${stats.sugar}g, Water: ${stats.water}ml, Movement: ${stats.movementMinutes}min.`;
 
   const chat = client.chats.create({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     config: { systemInstruction },
   });
 

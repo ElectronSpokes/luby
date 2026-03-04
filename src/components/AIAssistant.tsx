@@ -64,7 +64,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, userStats }) 
       const { apiKey } = await api.getLiveToken();
       const ai = new GoogleGenAI({ apiKey });
       const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         config: {
           systemInstruction: `You are Luby, a cute and fluffy health mascot for the Vitality Wellness app. 
           You are supportive, encouraging, and knowledgeable about health.
@@ -100,7 +100,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, userStats }) 
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       
       const sessionPromise = ai.live.connect({
-        model: "gemini-2.5-flash-native-audio-preview-09-2025",
+        model: "gemini-2.5-flash-native-audio-preview",
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
