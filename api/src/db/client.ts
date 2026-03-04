@@ -1,6 +1,9 @@
 import postgres from 'postgres';
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://luby:luby_secure_2026@localhost:5432/luby';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required — load via Vault or .env');
+}
 
 export const sql = postgres(connectionString, {
   max: 10,

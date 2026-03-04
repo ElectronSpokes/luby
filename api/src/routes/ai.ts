@@ -14,10 +14,9 @@ export const aiRoutes = new Hono<AppEnv>();
 
 // POST /ai/coaching-plan
 aiRoutes.post('/coaching-plan', async (c) => {
-  const body = await c.req.json();
-  const { stats } = body;
-
   try {
+    const body = await c.req.json();
+    const { stats } = body;
     const plan = await generateCoachingPlan(stats);
     return c.json(plan);
   } catch (error) {
@@ -28,10 +27,9 @@ aiRoutes.post('/coaching-plan', async (c) => {
 
 // POST /ai/insight
 aiRoutes.post('/insight', async (c) => {
-  const body = await c.req.json();
-  const { stats } = body;
-
   try {
+    const body = await c.req.json();
+    const { stats } = body;
     const insight = await generateInsight(stats);
     return c.json({ insight });
   } catch (error) {
@@ -42,10 +40,9 @@ aiRoutes.post('/insight', async (c) => {
 
 // POST /ai/scan-food
 aiRoutes.post('/scan-food', async (c) => {
-  const body = await c.req.json();
-  const { image, mimeType } = body;
-
   try {
+    const body = await c.req.json();
+    const { image, mimeType } = body;
     const result = await scanFood(image, mimeType || 'image/jpeg');
     return c.json(result);
   } catch (error) {
@@ -56,10 +53,9 @@ aiRoutes.post('/scan-food', async (c) => {
 
 // POST /ai/generate-meal-plan
 aiRoutes.post('/generate-meal-plan', async (c) => {
-  const body = await c.req.json();
-  const { preferences } = body;
-
   try {
+    const body = await c.req.json();
+    const { preferences } = body;
     const result = await generateMealPlan(preferences);
     return c.json(result);
   } catch (error) {
@@ -70,10 +66,9 @@ aiRoutes.post('/generate-meal-plan', async (c) => {
 
 // POST /ai/search-recipes
 aiRoutes.post('/search-recipes', async (c) => {
-  const body = await c.req.json();
-  const { query } = body;
-
   try {
+    const body = await c.req.json();
+    const { query } = body;
     const recipes = await searchRecipes(query);
     return c.json({ recipes });
   } catch (error) {
@@ -84,10 +79,9 @@ aiRoutes.post('/search-recipes', async (c) => {
 
 // POST /ai/chat
 aiRoutes.post('/chat', async (c) => {
-  const body = await c.req.json();
-  const { messages, stats } = body;
-
   try {
+    const body = await c.req.json();
+    const { messages, stats } = body;
     const response = await chatWithLuby(messages, stats);
     return c.json({ response });
   } catch (error) {

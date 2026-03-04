@@ -31,7 +31,7 @@ recipesRoutes.post('/', async (c) => {
   return c.json(recipe, 201);
 });
 
-// POST /recipes/bulk - save multiple recipes
+// POST /recipes/bulk - save multiple recipes (transactional)
 recipesRoutes.post('/bulk', async (c) => {
   const userId = c.get('auth').userId;
   const body = await c.req.json();
@@ -41,16 +41,19 @@ recipesRoutes.post('/bulk', async (c) => {
     return c.json({ error: 'recipes must be an array' }, 400);
   }
 
-  const inserted = [];
-  for (const r of recipeList) {
-    const [recipe] = await sql`
-      INSERT INTO recipes (user_id, name, description, ingredients, instructions, calories, protein, fiber, carbs, fat, sugar)
-      VALUES (${userId}, ${r.name}, ${r.description || ''}, ${sql.json(r.ingredients || [])}, ${sql.json(r.instructions || [])},
-              ${r.calories || 0}, ${r.protein || 0}, ${r.fiber || 0}, ${r.carbs || 0}, ${r.fat || 0}, ${r.sugar || 0})
-      RETURNING *
-    `;
-    inserted.push(recipe);
-  }
+  const inserted = await sql.begin(async (tx) => {
+    const rows = [];
+    for (const r of recipeList) {
+      const [recipe] = await tx`
+        INSERT INTO recipes (user_id, name, description, ingredients, instructions, calories, protein, fiber, carbs, fat, sugar)
+        VALUES (${userId}, ${r.name}, ${r.description || ''}, ${sql.json(r.ingredients || [])}, ${sql.json(r.instructions || [])},
+                ${r.calories || 0}, ${r.protein || 0}, ${r.fiber || 0}, ${r.carbs || 0}, ${r.fat || 0}, ${r.sugar || 0})
+        RETURNING *
+      `;
+      rows.push(recipe);
+    }
+    return rows;
+  });
 
   return c.json(inserted, 201);
 });

@@ -1,21 +1,14 @@
 import { Hono } from 'hono';
-import { setCookie } from 'hono/cookie';
+import { setCookie, getCookie } from 'hono/cookie';
 import * as jose from 'jose';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, getJwks, upsertUser } from '../middleware/auth';
+import { getConfig } from '../config';
 import type { AppEnv } from '../types';
 
 export const authRoutes = new Hono<AppEnv>();
 
 // Apply auth middleware to /me endpoint
 authRoutes.use('/me', authMiddleware);
-
-const getConfig = () => ({
-  issuer: process.env.AUTHENTIK_ISSUER || 'https://auth.theflux.life/application/o/luby/',
-  clientId: process.env.AUTHENTIK_CLIENT_ID || 'luby-api',
-  clientSecret: process.env.AUTHENTIK_CLIENT_SECRET || '',
-  apiBaseUrl: process.env.API_BASE_URL || 'http://10.0.110.27:3001',
-  frontendUrl: process.env.FRONTEND_URL || 'http://10.0.110.27:3000',
-});
 
 // GET /auth/login - Initiate OIDC login
 authRoutes.get('/login', async (c) => {
@@ -55,8 +48,8 @@ authRoutes.get('/callback', async (c) => {
   const config = getConfig();
   const code = c.req.query('code');
   const state = c.req.query('state');
-  const storedState = c.req.header('Cookie')?.match(/oauth_state=([^;]+)/)?.[1];
-  const storedNonce = c.req.header('Cookie')?.match(/oauth_nonce=([^;]+)/)?.[1];
+  const storedState = getCookie(c, 'oauth_state');
+  const storedNonce = getCookie(c, 'oauth_nonce');
 
   if (!code || !state) {
     return c.json({ error: 'Missing code or state' }, 400);
@@ -91,16 +84,25 @@ authRoutes.get('/callback', async (c) => {
       expires_in: number;
     };
 
-    // Verify ID token
-    const jwks = jose.createRemoteJWKSet(new URL(`${config.issuer}jwks/`));
+    // Verify ID token — reuse cached JWKS from middleware
+    const jwks = await getJwks();
     const { payload } = await jose.jwtVerify(tokens.id_token, jwks, {
       issuer: config.issuer,
       audience: config.clientId,
     });
 
-    if (payload.nonce !== storedNonce) {
+    if (!storedNonce || payload.nonce !== storedNonce) {
       return c.json({ error: 'Invalid nonce' }, 400);
     }
+
+    // Upsert user on login (not on every request)
+    await upsertUser({
+      type: 'human',
+      sub: payload.sub,
+      email: payload.email as string | undefined,
+      name: payload.name as string | undefined,
+      preferred_username: payload.preferred_username as string | undefined,
+    });
 
     // Set session cookie
     setCookie(c, 'luby_session', tokens.access_token, {

@@ -44,11 +44,22 @@ async function authenticateWithAppRole(
   return data.auth.client_token;
 }
 
-export async function loadSecretsFromVault(): Promise<boolean> {
-  if (process.env.VAULT_SKIP_VERIFY === 'true') {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  }
+/** Scoped TLS skip — only disables verification during the callback, restores after */
+function withTlsSkip<T>(fn: () => Promise<T>, skipVerify: boolean): Promise<T> {
+  if (!skipVerify) return fn();
+  const prev = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  return fn().finally(() => {
+    if (prev === undefined) {
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    } else {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = prev;
+    }
+  });
+}
 
+export async function loadSecretsFromVault(): Promise<boolean> {
+  const skipVerify = process.env.VAULT_SKIP_VERIFY === 'true';
   const vaultAddr = process.env.VAULT_ADDR;
   const vaultPath = process.env.VAULT_SECRET_PATH || 'secret/data/luby/api';
 
@@ -67,38 +78,40 @@ export async function loadSecretsFromVault(): Promise<boolean> {
   }
 
   try {
-    if (!vaultToken && roleId && secretId) {
-      console.log(`Authenticating with Vault AppRole: ${vaultAddr}`);
-      vaultToken = await authenticateWithAppRole(vaultAddr, roleId, secretId);
-    }
-
-    console.log(`Loading secrets from Vault: ${vaultAddr}`);
-
-    const response = await fetch(`${vaultAddr}/v1/${vaultPath}`, {
-      headers: { 'X-Vault-Token': vaultToken! },
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`Vault path not found: ${vaultPath} - using env fallback`);
-        return false;
+    return await withTlsSkip(async () => {
+      if (!vaultToken && roleId && secretId) {
+        console.log(`Authenticating with Vault AppRole: ${vaultAddr}`);
+        vaultToken = await authenticateWithAppRole(vaultAddr, roleId, secretId);
       }
-      throw new Error(`Vault returned ${response.status}: ${await response.text()}`);
-    }
 
-    const data: VaultResponse = await response.json();
-    const secrets = data.data.data;
+      console.log(`Loading secrets from Vault: ${vaultAddr}`);
 
-    let loadedCount = 0;
-    for (const [vaultKey, envKey] of Object.entries(SECRET_MAPPING)) {
-      if (secrets[vaultKey]) {
-        process.env[envKey] = secrets[vaultKey];
-        loadedCount++;
+      const response = await fetch(`${vaultAddr}/v1/${vaultPath}`, {
+        headers: { 'X-Vault-Token': vaultToken! },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn(`Vault path not found: ${vaultPath} - using env fallback`);
+          return false;
+        }
+        throw new Error(`Vault returned ${response.status}: ${await response.text()}`);
       }
-    }
 
-    console.log(`Loaded ${loadedCount} secrets from Vault`);
-    return true;
+      const data: VaultResponse = await response.json();
+      const secrets = data.data.data;
+
+      let loadedCount = 0;
+      for (const [vaultKey, envKey] of Object.entries(SECRET_MAPPING)) {
+        if (secrets[vaultKey]) {
+          process.env[envKey] = secrets[vaultKey];
+          loadedCount++;
+        }
+      }
+
+      console.log(`Loaded ${loadedCount} secrets from Vault`);
+      return true;
+    }, skipVerify);
   } catch (error) {
     console.error('Vault error:', error instanceof Error ? error.message : error);
     console.log('Falling back to environment variables');

@@ -1,16 +1,13 @@
 import { Context, Next } from 'hono';
+import { getCookie } from 'hono/cookie';
 import * as jose from 'jose';
 import { sql } from '../db/client';
+import { getConfig } from '../config';
 import type { AuthContext, AuthUser } from '../types';
-
-const getConfig = () => ({
-  issuer: process.env.AUTHENTIK_ISSUER || 'https://auth.theflux.life/application/o/luby/',
-  clientId: process.env.AUTHENTIK_CLIENT_ID || 'luby-api',
-});
 
 let jwks: jose.JWTVerifyGetKey | null = null;
 
-async function getJwks(): Promise<jose.JWTVerifyGetKey> {
+export async function getJwks(): Promise<jose.JWTVerifyGetKey> {
   if (!jwks) {
     const config = getConfig();
     jwks = jose.createRemoteJWKSet(new URL(`${config.issuer}jwks/`));
@@ -41,8 +38,8 @@ async function verifyAuthentikToken(token: string): Promise<AuthUser | null> {
   }
 }
 
-// Upsert user and return DB id
-async function upsertUser(user: AuthUser): Promise<number> {
+// Upsert user — called only on login callback, not every request
+export async function upsertUser(user: AuthUser): Promise<number> {
   const [row] = await sql`
     INSERT INTO users (sub, email, name)
     VALUES (${user.sub!}, ${user.email || null}, ${user.name || null})
@@ -55,6 +52,12 @@ async function upsertUser(user: AuthUser): Promise<number> {
   return row.id;
 }
 
+// Lookup user by sub — fast SELECT, no write
+async function lookupUser(sub: string): Promise<number | null> {
+  const [row] = await sql`SELECT id FROM users WHERE sub = ${sub}`;
+  return row?.id ?? null;
+}
+
 export async function authMiddleware(c: Context, next: Next) {
   let user: AuthUser | null = null;
 
@@ -64,15 +67,17 @@ export async function authMiddleware(c: Context, next: Next) {
     user = await verifyAuthentikToken(authHeader.slice(7));
   }
 
-  // Check session cookie
-  const sessionCookie = c.req.header('Cookie')?.match(/luby_session=([^;]+)/);
-  if (!user && sessionCookie) {
-    user = await verifyAuthentikToken(sessionCookie[1]);
+  // Check session cookie (using Hono's getCookie)
+  if (!user) {
+    const sessionToken = getCookie(c, 'luby_session');
+    if (sessionToken) {
+      user = await verifyAuthentikToken(sessionToken);
+    }
   }
 
   let userId: number | null = null;
   if (user?.sub) {
-    userId = await upsertUser(user);
+    userId = await lookupUser(user.sub);
   }
 
   const authContext: AuthContext = { user, userId };

@@ -21,24 +21,26 @@ mealsRoutes.get('/', async (c) => {
 mealsRoutes.post('/', async (c) => {
   const userId = c.get('auth').userId;
   const body = await c.req.json();
-  const { plans } = body; // Array of { day, meals }
+  const { plans } = body;
 
   if (!Array.isArray(plans)) {
     return c.json({ error: 'plans must be an array' }, 400);
   }
 
-  // Delete existing plans for this user
-  await sql`DELETE FROM meal_plans WHERE user_id = ${userId}`;
-
-  const inserted = [];
-  for (const plan of plans) {
-    const [row] = await sql`
-      INSERT INTO meal_plans (user_id, day, meals)
-      VALUES (${userId}, ${plan.day}, ${sql.json(plan.meals)})
-      RETURNING *
-    `;
-    inserted.push(row);
-  }
+  // Transaction: delete + insert atomically
+  const inserted = await sql.begin(async (tx) => {
+    await tx`DELETE FROM meal_plans WHERE user_id = ${userId}`;
+    const rows = [];
+    for (const plan of plans) {
+      const [row] = await tx`
+        INSERT INTO meal_plans (user_id, day, meals)
+        VALUES (${userId}, ${plan.day}, ${sql.json(plan.meals)})
+        RETURNING *
+      `;
+      rows.push(row);
+    }
+    return rows;
+  });
 
   return c.json(inserted, 201);
 });
@@ -60,23 +62,26 @@ mealsRoutes.get('/shopping', async (c) => {
 mealsRoutes.post('/shopping', async (c) => {
   const userId = c.get('auth').userId;
   const body = await c.req.json();
-  const { items } = body; // Array of { name, category, checked }
+  const { items } = body;
 
   if (!Array.isArray(items)) {
     return c.json({ error: 'items must be an array' }, 400);
   }
 
-  await sql`DELETE FROM shopping_items WHERE user_id = ${userId}`;
-
-  const inserted = [];
-  for (const item of items) {
-    const [row] = await sql`
-      INSERT INTO shopping_items (user_id, name, category, checked)
-      VALUES (${userId}, ${item.name}, ${item.category || ''}, ${item.checked || false})
-      RETURNING *
-    `;
-    inserted.push(row);
-  }
+  // Transaction: delete + insert atomically
+  const inserted = await sql.begin(async (tx) => {
+    await tx`DELETE FROM shopping_items WHERE user_id = ${userId}`;
+    const rows = [];
+    for (const item of items) {
+      const [row] = await tx`
+        INSERT INTO shopping_items (user_id, name, category, checked)
+        VALUES (${userId}, ${item.name}, ${item.category || ''}, ${item.checked || false})
+        RETURNING *
+      `;
+      rows.push(row);
+    }
+    return rows;
+  });
 
   return c.json(inserted, 201);
 });

@@ -13,14 +13,16 @@ function getAI(): GoogleGenAI {
   return ai;
 }
 
-export async function generateCoachingPlan(stats: {
+interface HealthStats {
   calories: number;
   protein: number;
   fiber: number;
   sugar: number;
   water: number;
   movementMinutes: number;
-}) {
+}
+
+export async function generateCoachingPlan(stats: HealthStats) {
   const client = getAI();
   const response = await client.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -44,14 +46,7 @@ Create specific, actionable steps.`,
   return JSON.parse(response.text!);
 }
 
-export async function generateInsight(stats: {
-  calories: number;
-  protein: number;
-  fiber: number;
-  sugar: number;
-  water: number;
-  movementMinutes: number;
-}) {
+export async function generateInsight(stats: HealthStats) {
   const client = getAI();
   const response = await client.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -182,32 +177,23 @@ export async function searchRecipes(query: string) {
   return JSON.parse(response.text!);
 }
 
-export async function chatWithLuby(messages: Array<{ role: string; content: string }>, stats: {
-  calories: number;
-  protein: number;
-  fiber: number;
-  sugar: number;
-  water: number;
-  movementMinutes: number;
-}) {
+export async function chatWithLuby(messages: Array<{ role: string; content: string }>, stats: HealthStats) {
   const client = getAI();
 
   const systemInstruction = `You are Luby, a cute and fluffy health mascot. You're knowledgeable about nutrition, exercise, and wellness. Be encouraging, specific, and friendly. Keep responses concise.
 Current user stats today: Calories: ${stats.calories}, Protein: ${stats.protein}g, Fiber: ${stats.fiber}g, Sugar: ${stats.sugar}g, Water: ${stats.water}ml, Movement: ${stats.movementMinutes}min.`;
 
+  const lastMessage = messages[messages.length - 1];
+  const history = messages.slice(0, -1).map(msg => ({
+    role: msg.role === 'assistant' ? 'model' as const : 'user' as const,
+    parts: [{ text: msg.content }],
+  }));
+
   const chat = client.chats.create({
     model: 'gemini-2.5-flash',
     config: { systemInstruction },
+    history,
   });
-
-  // Send previous messages for context then the last user message
-  const lastMessage = messages[messages.length - 1];
-  const history = messages.slice(0, -1);
-
-  // Build history
-  for (const msg of history) {
-    await chat.sendMessage(msg.content);
-  }
 
   const response = await chat.sendMessage(lastMessage.content);
   return response.text || '';
