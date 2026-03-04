@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Browser } from '@capacitor/browser';
+import { Preferences } from '@capacitor/preferences';
 import { api } from './api';
+import { isNative } from './platform';
 
 interface User {
   sub: string;
@@ -25,14 +28,30 @@ export function useAuth() {
 
   useEffect(() => {
     checkAuth();
+
+    // Listen for auth events from deep link handler
+    const handler = () => { checkAuth(); };
+    window.addEventListener('luby:auth-changed', handler);
+    return () => window.removeEventListener('luby:auth-changed', handler);
   }, [checkAuth]);
 
-  const login = () => {
-    window.location.href = api.getLoginUrl();
+  const login = async () => {
+    if (isNative()) {
+      // Open system browser for Authentik login
+      await Browser.open({ url: api.getLoginUrl(true) });
+    } else {
+      window.location.href = api.getLoginUrl();
+    }
   };
 
-  const logout = () => {
-    window.location.href = api.getLogoutUrl();
+  const logout = async () => {
+    if (isNative()) {
+      await Preferences.remove({ key: 'auth_token' });
+      await Preferences.remove({ key: 'auth_expires' });
+      setUser(null);
+    } else {
+      window.location.href = api.getLogoutUrl();
+    }
   };
 
   return { user, loading, login, logout, checkAuth };

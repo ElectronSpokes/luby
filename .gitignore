@@ -7,3 +7,9 @@ coverage/
 .env*
 !.env.example
 config-env/
+
+# Capacitor native build artifacts
+ios/App/Pods/
+android/.gradle/
+android/app/build/
+android/build/

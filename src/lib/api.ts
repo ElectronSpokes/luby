@@ -1,11 +1,27 @@
+import { Preferences } from '@capacitor/preferences';
+import { isNative } from './platform';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://10.0.110.27:3001';
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (!isNative()) return {};
+
+  const { value } = await Preferences.get({ key: 'auth_token' });
+  if (value) {
+    return { Authorization: `Bearer ${value}` };
+  }
+  return {};
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const authHeaders = await getAuthHeaders();
+
   const res = await fetch(`${API_URL}/api/v1${path}`, {
     ...options,
-    credentials: 'include',
+    credentials: isNative() ? 'omit' : 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options?.headers,
     },
   });
@@ -21,7 +37,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   // Auth
   getMe: () => request<{ user: { sub: string; email: string; name: string; preferred_username: string } | null }>('/auth/me'),
-  getLoginUrl: () => `${API_URL}/api/v1/auth/login`,
+  getLoginUrl: (mobile = false) => `${API_URL}/api/v1/auth/login${mobile ? '?mobile=true' : ''}`,
   getLogoutUrl: () => `${API_URL}/api/v1/auth/logout`,
 
   // Food

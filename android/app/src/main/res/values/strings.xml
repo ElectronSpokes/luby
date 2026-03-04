@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Luby</string>
+    <string name="title_activity_main">Luby</string>
+    <string name="package_name">net.myluby.app</string>
+    <string name="custom_url_scheme">net.myluby.app</string>
+</resources>

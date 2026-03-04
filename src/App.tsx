@@ -43,6 +43,7 @@ import { AIAssistant } from './components/AIAssistant';
 import { LoginPage } from './components/LoginPage';
 import { useAuth } from './lib/useAuth';
 import { api } from './lib/api';
+import { hapticTap, hapticSuccess, hapticHeavy } from './lib/haptics';
 
 // --- Components ---
 // ... (CoachingView, AIInsight, StatCard, LubyMascot, WeightLossScore components)
@@ -437,16 +438,16 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
   return (
     <div className="min-h-screen pb-24 md:pb-0 md:pl-20">
       {/* Sidebar Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-0 md:w-20 bg-white border-t md:border-t-0 md:border-r border-slate-200 z-50 flex md:flex-col items-center justify-around md:justify-center gap-8 py-4 md:py-8">
-        <NavIcon active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={Activity} label="Home" />
-        <NavIcon active={activeTab === 'assistant'} onClick={() => setIsAssistantOpen(true)} icon={MessageSquare} label="Luby" />
-        <NavIcon active={activeTab === 'coaching'} onClick={() => setActiveTab('coaching')} icon={Lightbulb} label="Coach" />
-        <NavIcon active={activeTab === 'planner'} onClick={() => setActiveTab('planner')} icon={Calendar} label="Plan" />
-        <NavIcon active={activeTab === 'recipes'} onClick={() => setActiveTab('recipes')} icon={ChefHat} label="Eat" />
-        <NavIcon active={activeTab === 'food'} onClick={() => setActiveTab('food')} icon={Utensils} label="Food" />
-        <NavIcon active={activeTab === 'hydration'} onClick={() => setActiveTab('hydration')} icon={Droplets} label="Water" />
-        <NavIcon active={activeTab === 'movement'} onClick={() => setActiveTab('movement')} icon={Activity} label="Move" />
-        <NavIcon active={activeTab === 'fasting'} onClick={() => setActiveTab('fasting')} icon={Timer} label="Fast" />
+      <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-0 md:w-20 bg-white border-t md:border-t-0 md:border-r border-slate-200 z-50 flex md:flex-col items-center justify-around md:justify-center gap-8 py-4 md:py-8 safe-area-bottom">
+        <NavIcon active={activeTab === 'dashboard'} onClick={() => { hapticTap(); setActiveTab('dashboard'); }} icon={Activity} label="Home" />
+        <NavIcon active={activeTab === 'assistant'} onClick={() => { hapticTap(); setIsAssistantOpen(true); }} icon={MessageSquare} label="Luby" />
+        <NavIcon active={activeTab === 'coaching'} onClick={() => { hapticTap(); setActiveTab('coaching'); }} icon={Lightbulb} label="Coach" />
+        <NavIcon active={activeTab === 'planner'} onClick={() => { hapticTap(); setActiveTab('planner'); }} icon={Calendar} label="Plan" />
+        <NavIcon active={activeTab === 'recipes'} onClick={() => { hapticTap(); setActiveTab('recipes'); }} icon={ChefHat} label="Eat" />
+        <NavIcon active={activeTab === 'food'} onClick={() => { hapticTap(); setActiveTab('food'); }} icon={Utensils} label="Food" />
+        <NavIcon active={activeTab === 'hydration'} onClick={() => { hapticTap(); setActiveTab('hydration'); }} icon={Droplets} label="Water" />
+        <NavIcon active={activeTab === 'movement'} onClick={() => { hapticTap(); setActiveTab('movement'); }} icon={Activity} label="Move" />
+        <NavIcon active={activeTab === 'fasting'} onClick={() => { hapticTap(); setActiveTab('fasting'); }} icon={Timer} label="Fast" />
       </nav>
 
       <main className="max-w-5xl mx-auto p-6 md:p-10">
@@ -497,7 +498,7 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                onClick={() => setActiveTab('coaching')}
+                onClick={() => { hapticTap(); setActiveTab('coaching'); }}
                 className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm cursor-pointer hover:border-violet-200 transition-colors group"
               >
                 <div className="flex items-center justify-between">
@@ -557,7 +558,7 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
                           </div>
                           <button 
                             onClick={() => {
-                              api.completeFasting(activeFasting.id).then(saved => {
+                              api.completeFasting(activeFasting.id).then(saved => { hapticHeavy();
                                 setFastingSessions(prev => prev.map(s => s.id === activeFasting.id ? { ...s, status: 'completed', endTime: Date.now() } : s));
                               });
                             }}
@@ -571,7 +572,7 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
                           <p className="text-slate-400 mb-6">Ready to start your next fast?</p>
                           <button 
                             onClick={() => {
-                              api.startFasting({ startTime: Date.now(), targetDuration: 16 }).then(saved => {
+                              api.startFasting({ startTime: Date.now(), targetDuration: 16 }).then(saved => { hapticHeavy();
                                 setFastingSessions(prev => [...prev, { ...saved, startTime: Number(saved.start_time || saved.startTime), targetDuration: Number(saved.target_duration || saved.targetDuration) }]);
                               });
                             }}
@@ -694,7 +695,7 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
                     sugar: Number(formData.get('sugar')),
                     timestamp: Date.now()
                   };
-                  api.addFood(entry).then(saved => setFoodEntries(prev => [...prev, { ...saved, timestamp: Number(saved.timestamp) }]));
+                  api.addFood(entry).then(saved => { hapticSuccess(); setFoodEntries(prev => [...prev, { ...saved, timestamp: Number(saved.timestamp) }]); });
                   (e.target as HTMLFormElement).reset();
                 }}>
                   <div className="space-y-2">
@@ -997,7 +998,7 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
 
       {isScannerOpen && (
         <FoodScanner 
-          onFoodDetected={(entry) => {
+          onFoodDetected={(entry) => { hapticSuccess();
             const newEntry: FoodEntry = {
               ...entry,
               id: Math.random().toString(36).substr(2, 9),
@@ -1022,7 +1023,7 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
       {/* Quick Action Button (Mobile) */}
       <div className="fixed bottom-24 right-6 md:hidden flex flex-col gap-4">
         <button 
-          onClick={() => setIsAssistantOpen(true)}
+          onClick={() => { hapticTap(); setIsAssistantOpen(true); }}
           className="w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center"
         >
           <MessageSquare className="w-6 h-6" />

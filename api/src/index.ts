@@ -31,6 +31,8 @@ app.use('*', cors({
     'http://10.0.110.27:3000',
     'https://myluby.net',
     'https://www.myluby.net',
+    'capacitor://localhost',
+    'http://localhost',
   ],
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization'],
