@@ -208,8 +208,19 @@ authRoutes.get('/callback/mobile', async (c) => {
     });
 
     // Redirect to mobile app via deep link with the access token
+    // Redirect to mobile app via deep link with the access token
     const deepLink = `net.myluby.app://auth/callback?token=${encodeURIComponent(tokens.access_token)}&expires_in=${tokens.expires_in}`;
-    return c.redirect(deepLink);
+    
+    // Return HTML page that redirects via JS — HTTP 302 with custom schemes
+    // is blocked by Chrome Custom Tabs on Android
+    return c.html(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Redirecting...</title></head>
+<body style="font-family:system-ui;text-align:center;padding:40px">
+<p>Signing you in...</p>
+<script>window.location.href="${deepLink}";</script>
+<p style="margin-top:20px"><a href="${deepLink}">Tap here if not redirected</a></p>
+</body></html>`);
+
   } catch (error) {
     console.error('Mobile OAuth callback error:', error);
     return c.json({ error: 'Authentication failed' }, 500);
