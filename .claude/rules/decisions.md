@@ -1,39 +1,25 @@
-# Architecture Decisions
+# Architecture Decisions — Luby
 
-Key decisions that shaped HALINOVA's architecture.
+## Auth
 
-## Core Architecture
+- **Google Sign-In for mobile, Authentik OIDC for web** (2026-03): Mobile deep-link OIDC flow was unreliable. Google Sign-In SDK gives native UX, token exchanged server-side at /api/v1/auth/google/token
+- **Session cookies over JWT** (2026-03): Simpler for a personal app. Cookie on .myluby.net works across CF Pages frontend and tunnel API
+- **Cross-origin sameSite None** (2026-03): Required for capacitor://localhost (iOS) and http://localhost (Android) to send cookies to api.myluby.net
 
-- **Hybrid architecture** (2026-01-22): Native systemd services (nova-api, nova-worker, hali-agent, matrix-bot) + Docker infrastructure (DBs, Redis, Vault, StackStorm) - enables faster dev iteration with --reload and easier debugging
+## API
 
-- **HALI agent in host network mode** (2026-01-19): Required for SNMP/LLDP discovery - can't use Docker bridge network
+- **Hono over Express** (2026-03): Lighter, Bun-native, better TypeScript support. Express kept as dependency for legacy compatibility
+- **Gemini server-side only** (2026-03): All AI calls proxied through /api/v1/ai/ endpoints. API key never reaches client. Verify: grep -c "AIzaSy" dist/assets/*.js = 0
+- **Vault AppRole for secrets** (2026-03): Login-per-startup, loads DB URL, Gemini key, auth creds from Vault. Falls back to .env for local dev
+- **Single migration file for v1** (2026-03): All 9 tables in 001-initial-schema.sql. Will split when schema evolves
 
-- **NOVA Orchestrator as AI-native trust gate** (2026-01-19): StackStorm becomes one execution backend, not central automation
+## Frontend
 
-## Execution Backends
+- **Single App.tsx over router** (2026-03): All views in one file with tab-based navigation. Works well for mobile-first layout. Refactor to pages/ when it exceeds ~2000 lines
+- **localStorage for offline state** (2026-03): Capacitor Preferences plugin for auth tokens. API is source of truth; localStorage is cache for offline UX
 
-- **Ansible as first-class backend** (2026-01-20): Alongside StackStorm - use for bulk operations, legacy devices, playbook-based automation
+## Deployment
 
-- **GEMS runs BEFORE Trust Gate** (2026-01-24): Provides risk data for policy decisions, not after
-
-- **Hybrid risk assessment** (2026-01-24): Rule-based core + optional AI enhancement - AI is additive, not required
-
-## Data & Credentials
-
-- **Vault as source of truth** (2026-01-22): All provider credentials fetched via ProviderFactory when VAULT_TOKEN is set
-
-- **Centralized Vault** (2026-01-22): On VLAN 25 (10.0.25.2), serves all products (HALINOVA, FAWB, DaChief) with path-based isolation
-
-- **NetBox as inventory source of truth** (2026-01-23): Sync VLANs/Prefixes from OPNsense, VMs from Proxmox, IPs from OPNsense ARP/DHCP
-
-## Infrastructure
-
-- **VM provisioning via templates** (2026-01-26): Clone from template ensures working cloud-init, network, SSH - no scratch builds
-
-- **Config-driven Springboard** (2026-01-28): Each satellite defines monitoring in YAML, same code works across all satellites
-
-- **Cached ProviderFactory singleton** (2026-01-28): Reuse for 5 minutes to prevent API session exhaustion (Pi-hole 429 errors)
-
-## Ecosystem Graph
-
-- **Explicit edges for visualization** (2026-01-29): parent_id field alone doesn't render connections in vis-network; must create edge records with `relation: depends_on`
+- **Gitea → GitHub → CF Pages pipeline** (2026-03): Push to Gitea, auto-mirrors to GitHub, CF Pages auto-deploys. One git push ships frontend
+- **CF Tunnel for API** (2026-03): No need to expose port directly. Tunnel handles TLS termination
+- **APK served from API** (2026-03): /download/app.apk endpoint for quick dev distribution. Replace with proper distribution for prod
