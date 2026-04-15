@@ -25,15 +25,7 @@ const app = new Hono<AppEnv>();
 // Global middleware
 app.use('*', logger());
 app.use('*', cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://10.0.110.27:3000',
-    'https://myluby.net',
-    'https://www.myluby.net',
-    'capacitor://localhost',  // iOS
-    'http://localhost',       // Android
-  ],
+  origin: (origin) => origin || '*',
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -46,8 +38,14 @@ app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOStri
 app.get('/download/app.apk', async (c) => {
   const file = Bun.file('/opt/luby/android/app/build/outputs/apk/debug/app-debug.apk');
   if (!await file.exists()) return c.text('APK not found', 404);
+  const size = file.size;
   return new Response(file, {
-    headers: { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Disposition': 'attachment; filename="luby.apk"' },
+    headers: {
+      'Content-Type': 'application/vnd.android.package-archive',
+      'Content-Disposition': 'attachment; filename="luby.apk"',
+      'Content-Length': String(size),
+      'Cache-Control': 'no-store',
+    },
   });
 });
 

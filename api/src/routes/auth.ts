@@ -129,7 +129,7 @@ authRoutes.post('/google-signin', async (c) => {
     );
     const { payload } = await jose.jwtVerify(body.idToken, googleJwks, {
       issuer: ['https://accounts.google.com', 'accounts.google.com'],
-      audience: config.googleClientId,
+      // Accept tokens for any of our client IDs (web + android)
     });
 
     const email = payload.email as string;

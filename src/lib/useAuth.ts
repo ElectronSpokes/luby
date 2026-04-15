@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Preferences } from '@capacitor/preferences';
+import { SocialLogin } from '@capgo/capacitor-social-login';
 import { api } from './api';
 import { isNative } from './platform';
 
@@ -15,12 +16,6 @@ const GOOGLE_WEB_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 let socialLoginInitialized = false;
 let initError: string | null = null;
-
-// Lazy-load the plugin only on native (avoids web build issues)
-async function getSocialLogin() {
-  const { SocialLogin } = await import('@capgo/capacitor-social-login');
-  return SocialLogin;
-}
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -43,14 +38,11 @@ export function useAuth() {
     // Initialize Google Sign-In on native
     if (isNative() && !socialLoginInitialized && GOOGLE_WEB_CLIENT_ID) {
       socialLoginInitialized = true;
-      getSocialLogin()
-        .then((SocialLogin) =>
-          SocialLogin.initialize({
-            google: {
-              webClientId: GOOGLE_WEB_CLIENT_ID,
-            },
-          })
-        )
+      SocialLogin.initialize({
+        google: {
+          webClientId: GOOGLE_WEB_CLIENT_ID,
+        },
+      })
         .then(() => console.log('[Luby] Google Sign-In initialized'))
         .catch((e: unknown) => {
           initError = String(e);
@@ -71,7 +63,6 @@ export function useAuth() {
       }
 
       try {
-        const SocialLogin = await getSocialLogin();
         const result = await SocialLogin.login({
           provider: 'google',
           options: {
@@ -117,7 +108,6 @@ export function useAuth() {
   const logout = async () => {
     if (isNative()) {
       try {
-        const SocialLogin = await getSocialLogin();
         await SocialLogin.logout({ provider: 'google' });
       } catch {}
       await Preferences.remove({ key: 'auth_token' });
