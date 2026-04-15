@@ -1,6 +1,6 @@
 # Luby — Roadmap
 *Maintained by: Cleireach*
-*Last updated: 2026-04-12*
+*Last updated: 2026-04-15*
 
 ## Current State
 
@@ -29,7 +29,8 @@ Vault AppRole integration (secrets at `secret/data/luby/api`). Cloudflare Pages 
 
 ### Priority 1: App Store Submission
 - [ ] iOS TestFlight build on Mac Mini M4 (10.0.15.10)
-- [ ] Google Play submission (APK builds working, dev endpoint exists)
+- [x] Android debug APK building on VM + installed on device
+- [ ] Google Play submission (production signing needed)
 - [ ] Apple Developer and Google Play Console credential setup
 
 ### Priority 2: Push Notifications
@@ -65,7 +66,7 @@ Vault AppRole integration (secrets at `secret/data/luby/api`). Cloudflare Pages 
 | Meal Planning | Live | 7-day AI meal plans with shopping lists |
 | Recipes | Live | AI recipe search and save |
 | Chat | Live | Conversational AI with health context |
-| Mobile App | Beta | Capacitor shell, native camera, haptics |
+| Mobile App | Live (Android) | Capacitor shell, native camera, haptics |
 
 ## Sources
 
