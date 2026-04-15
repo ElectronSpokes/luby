@@ -31,8 +31,8 @@ app.use('*', cors({
     'http://10.0.110.27:3000',
     'https://myluby.net',
     'https://www.myluby.net',
-    'capacitor://localhost',
-    'http://localhost',
+    'capacitor://localhost',  // iOS
+    'http://localhost',       // Android
   ],
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization'],
@@ -41,6 +41,15 @@ app.use('*', cors({
 
 // Health check (no auth)
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+// Temporary: serve APK for development
+app.get('/download/app.apk', async (c) => {
+  const file = Bun.file('/opt/luby/android/app/build/outputs/apk/debug/app-debug.apk');
+  if (!await file.exists()) return c.text('APK not found', 404);
+  return new Response(file, {
+    headers: { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Disposition': 'attachment; filename="luby.apk"' },
+  });
+});
 
 // API router
 const api = new Hono<AppEnv>();
