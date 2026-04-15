@@ -5,8 +5,17 @@ const config: CapacitorConfig = {
   appName: 'Luby',
   webDir: 'dist',
   server: {
-    // Allow navigation to Authentik for OAuth
-    allowNavigation: ['auth.theflux.life', 'api.myluby.net'],
+    // Live reload: phone loads from Vite dev server
+    // Comment out these 2 lines for production builds
+    url: 'http://10.0.110.27:3000',
+    cleartext: true,
+  },
+  plugins: {
+    SocialLogin: {
+      providers: {
+        google: true,
+      },
+    },
   },
 };
 
