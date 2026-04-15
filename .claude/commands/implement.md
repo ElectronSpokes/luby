@@ -1,62 +1,44 @@
 # Implement
 
-Execute tasks from an orchestration plan. Can run as specific specialist or all tasks.
+Execute tasks from a spec's task breakdown.
 
 ## Usage
 
 ```
-/implement <feature-name> [agent-type]
+/implement <project>/<feature-name>
 ```
-
-Where `agent-type` is optional:
-- `backend` - Run backend tasks with backend-specialist
-- `frontend` - Run frontend tasks with frontend-specialist
-- `tests` - Run test tasks with test-specialist
-- (omit) - Run all tasks sequentially
 
 ## Prerequisites
 
-- `specs/<feature-name>/orchestration.yml` must exist (run /orchestrate first)
-- Or `specs/<feature-name>/tasks.md` for simpler execution
+- `agent-os/specs/<project>/<feature-name>/tasks.md` must exist (run /create-tasks first)
+- Feature must be on the target project's roadmap
 
 ## Instructions
 
 ### 1. Load Context
 
-Read the orchestration plan:
+Read the task breakdown:
 ```bash
-cat specs/<feature-name>/orchestration.yml
+cat agent-os/specs/<project>/<feature-name>/tasks.md
 ```
 
-If running as specialist, extract your tasks and context.
-
-### 2. Set Up Progress Tracking
-
-Update `specs/<feature-name>/status.md`:
-
-```markdown
-## Current Phase
-Implementation In Progress
-
-## Progress
-
-### Backend Tasks
-- [ ] BE-1: [description]
-- [ ] BE-2: [description]
-- [ ] BE-3: [description]
-
-### Frontend Tasks
-- [ ] FE-1: [description]
-- [ ] FE-2: [description]
-
-### Test Tasks
-- [ ] TE-1: [description]
-- [ ] TE-2: [description]
+Also check the legacy flat location if not found:
+```bash
+cat agent-os/specs/<feature-name>/tasks.md
 ```
+
+### 2. Check Target Project
+
+Determine where to implement:
+- DaChief features: SSH to `10.0.110.12`, work in `/opt/dachief/`
+- HALINOVA features: work locally in `/opt/halinova/`
+- Other projects: SSH to their VM or work in their local repo
+
+Read the target project's `product/standards.md` for coding conventions.
 
 ### 3. Execute Tasks
 
-For each task in your group:
+For each task:
 
 1. **Check dependencies**
    - Are prerequisite tasks complete?
@@ -80,44 +62,54 @@ For each task in your group:
    - Mark task complete in status.md
    - Note any issues or decisions
 
-### 4. Handle Blockers
+### 3b. Doc Checkpoint
 
-If blocked by another agent's task:
+Before marking the wave complete, check if docs need updating:
 
-```markdown
-## Blockers
+1. **Check for `doc-dependencies.yaml`** in the target project repo
+   - If not found: skip this section, proceed to step 4
 
-### FE-2: Waiting on BE-1
-- **Blocked since:** [time]
-- **Waiting for:** API endpoint for user data
-- **Workaround:** Using mock data, will integrate when ready
-```
+2. **Get files changed in this wave:**
+   - From git status/log, or from the task completion notes above
+   - List all source files that were created or modified
 
-### 5. Signal Completion
+3. **Match against dependency map:**
+   - For each changed file, check if it matches any `code:` glob pattern in `doc-dependencies.yaml`
+   - Collect the set of `docs:` that are mapped to changed code
 
-When your task group is done:
+4. **Check which docs were updated in this wave:**
+   - For each affected doc, check if it was modified in this session (git diff or file timestamps)
 
-Update status.md:
-```markdown
-## [Agent] Tasks: COMPLETE
+5. **Display DOC CHECKPOINT:**
+   ```
+   DOC CHECKPOINT
+   ==============
+   Changed code affects these docs:
 
-All [count] tasks finished.
-Waiting for: [other agents or "none"]
-```
+     [doc path]    UPDATED (modified in this wave)
+     [doc path]    STALE — [reason from doc-dependencies.yaml]
 
-### 6. Coordinate with Other Agents
+   For each stale doc: [U]pdate now or [D]efer as tech debt?
+   ```
 
-If running in parallel with other Claude instances:
+6. **For deferred docs:** append an entry to `doc-tech-debt.md` in the project root:
+   ```markdown
+   | [today's date] | [wave number] | [doc path] | [reason provided by user] |
+   ```
+   Create the file with a header row if it doesn't exist yet.
 
-**DO:**
-- Work only on your assigned files
-- Update status.md with progress
-- Leave TODO comments for integration points
+7. **All docs addressed** (updated or deferred) → proceed to step 4.
+   If all affected docs are already fresh, the checkpoint passes silently.
 
-**DON'T:**
-- Modify files owned by other agents
-- Make assumptions about other agents' implementations
-- Block without documenting why
+### 4. Update Roadmap on Completion
+
+When all tasks for this feature are done:
+
+1. Mark the item DONE on the target project's `product/roadmap.md`
+2. Update `agent-os/specs/<project>/<feature-name>/status.md` to "Complete"
+3. Update `product/context.md` if health/momentum changed
+
+This is the Ship stage of the pipeline — don't skip it.
 
 ## Output
 
@@ -126,8 +118,9 @@ After completing tasks, report:
 ```
 IMPLEMENTATION PROGRESS
 =======================
+Project: <project>
 Feature: <feature-name>
-Agent: <agent-type or "all">
+Wave: <wave number>
 
 Tasks completed: [count]/[total]
 - BE-1: Done
@@ -139,6 +132,7 @@ Files modified:
 - src/models/feature.ts (modified)
 - tests/feature.test.ts (created)
 
+Roadmap updated: [yes/no]
 Blockers: [count or "none"]
 
 Next steps:
@@ -146,28 +140,10 @@ Next steps:
 - [any coordination needed]
 ```
 
-## Specialist Mode
-
-When running as a specialist agent, focus only on your domain:
-
-**backend-specialist:**
-- APIs, database schemas, services
-- Data validation and business logic
-- See subagents/backend-specialist.md
-
-**frontend-specialist:**
-- Components, state, UI logic
-- User interactions and flows
-- See subagents/frontend-specialist.md
-
-**test-specialist:**
-- Unit, integration, e2e tests
-- Test utilities and mocks
-- See subagents/test-specialist.md
-
 ## Tips
 
 - Complete tasks in dependency order
 - Commit after each task (or logical group)
 - Document decisions in task notes
 - Ask for clarification if spec is ambiguous
+- Always update the roadmap when done — the roadmap is the plan

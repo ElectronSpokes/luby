@@ -1,0 +1,70 @@
+# Doc Dependencies — maps code paths to the product docs that describe them.
+#
+# Used by /implement (DOC CHECKPOINT) and /simplify (DOC ALIGNMENT) to detect
+# when code changes without corresponding doc updates.
+
+dependencies:
+  # ── API Routes ──────────────────────────────────────────────────────────────
+  - code:
+      - "api/src/routes/*.ts"
+    docs:
+      - "product/architecture.md"
+      - "product/data-flow.md"
+    reason: "API routes define the endpoint surface documented in architecture and data-flow"
+
+  - code:
+      - "api/src/routes/auth.ts"
+      - "api/src/middleware/auth.ts"
+    docs:
+      - "product/architecture.md"
+      - "product/standards.md"
+    reason: "Auth flow (Authentik OIDC + Google Sign-In) documented in architecture and standards"
+
+  - code:
+      - "api/src/routes/ai.ts"
+      - "api/src/services/gemini.ts"
+    docs:
+      - "product/architecture.md"
+      - "product/roadmap.md"
+    reason: "AI proxy endpoints and Gemini integration documented in architecture"
+
+  # ── Database ────────────────────────────────────────────────────────────────
+  - code:
+      - "api/src/db/**/*.ts"
+    docs:
+      - "product/data-flow.md"
+      - "product/architecture.md"
+    reason: "Database schema and queries affect data model in architecture and data-flow"
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
+  - code:
+      - "src/lib/api.ts"
+      - "src/lib/useAuth.ts"
+    docs:
+      - "product/architecture.md"
+    reason: "API client and auth hook are key integration points in architecture"
+
+  # ── Mobile / Capacitor ──────────────────────────────────────────────────────
+  - code:
+      - "capacitor.config.ts"
+      - "android/**/*.java"
+      - "android/**/*.gradle"
+    docs:
+      - "product/architecture.md"
+      - "product/roadmap.md"
+    reason: "Mobile app config and native code affect architecture and roadmap status"
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+  - code:
+      - "api/src/services/vault.ts"
+      - "api/src/config.ts"
+    docs:
+      - "product/architecture.md"
+      - "product/operating-model.md"
+    reason: "Vault integration and config shape documented in architecture and operating-model"
+
+  - code:
+      - "api/src/index.ts"
+    docs:
+      - "product/architecture.md"
+    reason: "Server setup, CORS, middleware chain documented in architecture"
