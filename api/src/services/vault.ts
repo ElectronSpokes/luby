@@ -23,6 +23,7 @@ const SECRET_MAPPING: Record<string, string> = {
   authentik_client_id: 'AUTHENTIK_CLIENT_ID',
   authentik_client_secret: 'AUTHENTIK_CLIENT_SECRET',
   session_secret: 'SESSION_SECRET',
+  google_client_id: 'GOOGLE_CLIENT_ID',
 };
 
 async function authenticateWithAppRole(
@@ -44,7 +45,7 @@ async function authenticateWithAppRole(
   return data.auth.client_token;
 }
 
-/** Scoped TLS skip — only disables verification during the callback, restores after */
+/** Scoped TLS skip -- only disables verification during the callback, restores after */
 function withTlsSkip<T>(fn: () => Promise<T>, skipVerify: boolean): Promise<T> {
   if (!skipVerify) return fn();
   const prev = process.env.NODE_TLS_REJECT_UNAUTHORIZED;

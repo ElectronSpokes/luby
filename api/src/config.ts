@@ -5,4 +5,6 @@ export const getConfig = () => ({
   clientSecret: process.env.AUTHENTIK_CLIENT_SECRET || '',
   apiBaseUrl: process.env.API_BASE_URL || 'http://10.0.110.27:3001',
   frontendUrl: process.env.FRONTEND_URL || 'http://10.0.110.27:3000',
+  sessionSecret: process.env.SESSION_SECRET || '',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 });

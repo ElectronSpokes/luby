@@ -1,75 +1,48 @@
 import { Hono } from 'hono';
 import { setCookie, getCookie } from 'hono/cookie';
 import * as jose from 'jose';
-import { authMiddleware, getJwks, upsertUser } from '../middleware/auth';
+import { authMiddleware, getJwks, upsertUser, lookupUserByEmail } from '../middleware/auth';
 import { getConfig } from '../config';
+import { sql } from '../db/client';
 import type { AppEnv } from '../types';
 
 export const authRoutes = new Hono<AppEnv>();
 
-// Server-side state store for mobile OAuth (cookies don't work in system browser)
-const mobileOAuthStore = new Map<string, { nonce: string; createdAt: number }>();
-
-// Clean up expired entries (older than 5 minutes)
-function cleanupMobileStore() {
-  const now = Date.now();
-  for (const [key, val] of mobileOAuthStore) {
-    if (now - val.createdAt > 300_000) mobileOAuthStore.delete(key);
-  }
-}
-
-// Apply auth middleware to /me endpoint
 authRoutes.use('/me', authMiddleware);
 
-// GET /auth/login - Initiate OIDC login
+// GET /auth/login - Redirect to Authentik (web only)
 authRoutes.get('/login', async (c) => {
   const config = getConfig();
-  const isMobile = c.req.query('mobile') === 'true';
   const state = crypto.randomUUID();
   const nonce = crypto.randomUUID();
 
-  const redirectUri = isMobile
-    ? `${config.apiBaseUrl}/api/v1/auth/callback/mobile`
-    : `${config.apiBaseUrl}/api/v1/auth/callback`;
-
-  if (isMobile) {
-    // Store state server-side for mobile (system browser can't share cookies)
-    cleanupMobileStore();
-    mobileOAuthStore.set(state, { nonce, createdAt: Date.now() });
-  } else {
-    // Web: use cookies as before
-    setCookie(c, 'oauth_state', state, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'Lax',
-      maxAge: 300,
-      path: '/',
-    });
-
-    setCookie(c, 'oauth_nonce', nonce, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'Lax',
-      maxAge: 300,
-      path: '/',
-    });
-  }
+  setCookie(c, 'oauth_state', state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+    maxAge: 300,
+    path: '/',
+  });
+  setCookie(c, 'oauth_nonce', nonce, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+    maxAge: 300,
+    path: '/',
+  });
 
   const authUrl = new URL('https://auth.theflux.life/application/o/authorize/');
   authUrl.searchParams.set('client_id', config.clientId);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('scope', 'openid email profile');
-  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('redirect_uri', `${config.apiBaseUrl}/api/v1/auth/callback`);
   authUrl.searchParams.set('state', state);
   authUrl.searchParams.set('nonce', nonce);
-
-  if (isMobile) {
-  }
 
   return c.redirect(authUrl.toString());
 });
 
-// GET /auth/callback - Handle OIDC callback (web)
+// GET /auth/callback - Web (cookie-based)
 authRoutes.get('/callback', async (c) => {
   const config = getConfig();
   const code = c.req.query('code');
@@ -77,13 +50,8 @@ authRoutes.get('/callback', async (c) => {
   const storedState = getCookie(c, 'oauth_state');
   const storedNonce = getCookie(c, 'oauth_nonce');
 
-  if (!code || !state) {
-    return c.json({ error: 'Missing code or state' }, 400);
-  }
-
-  if (state !== storedState) {
-    return c.json({ error: 'Invalid state' }, 400);
-  }
+  if (!code || !state) return c.json({ error: 'Missing code or state' }, 400);
+  if (state !== storedState) return c.json({ error: 'Invalid state' }, 400);
 
   try {
     const tokenResponse = await fetch('https://auth.theflux.life/application/o/token/', {
@@ -104,21 +72,14 @@ authRoutes.get('/callback', async (c) => {
       return c.json({ error: 'Token exchange failed' }, 400);
     }
 
-    const tokens = await tokenResponse.json() as {
-      access_token: string;
-      id_token: string;
-      expires_in: number;
-    };
-
+    const tokens = await tokenResponse.json() as { access_token: string; id_token: string; expires_in: number };
     const jwks = await getJwks();
     const { payload } = await jose.jwtVerify(tokens.id_token, jwks, {
       issuer: config.issuer,
       audience: config.clientId,
     });
 
-    if (!storedNonce || payload.nonce !== storedNonce) {
-      return c.json({ error: 'Invalid nonce' }, 400);
-    }
+    if (!storedNonce || payload.nonce !== storedNonce) return c.json({ error: 'Invalid nonce' }, 400);
 
     await upsertUser({
       type: 'human',
@@ -129,14 +90,9 @@ authRoutes.get('/callback', async (c) => {
     });
 
     setCookie(c, 'luby_session', tokens.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'None',
-      domain: '.myluby.net',
-      maxAge: tokens.expires_in,
-      path: '/',
+      httpOnly: true, secure: true, sameSite: 'None',
+      domain: '.myluby.net', maxAge: tokens.expires_in, path: '/',
     });
-
     setCookie(c, 'oauth_state', '', { maxAge: 0, path: '/' });
     setCookie(c, 'oauth_nonce', '', { maxAge: 0, path: '/' });
 
@@ -147,110 +103,97 @@ authRoutes.get('/callback', async (c) => {
   }
 });
 
-// GET /auth/callback/mobile - Handle OIDC callback (mobile deep link)
-authRoutes.get('/callback/mobile', async (c) => {
+// POST /auth/google-signin - Native mobile Google Sign-In
+authRoutes.post('/google-signin', async (c) => {
   const config = getConfig();
-  const code = c.req.query('code');
-  const state = c.req.query('state');
 
-  if (!code || !state) {
-    return c.json({ error: 'Missing code or state' }, 400);
+  if (!config.googleClientId || !config.sessionSecret) {
+    return c.json({ error: 'Google Sign-In not configured' }, 500);
   }
 
-  // Look up state from server-side store (not cookies)
-  const stored = mobileOAuthStore.get(state);
-  if (!stored) {
-    return c.json({ error: 'Invalid or expired state' }, 400);
+  let body: { idToken: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid request body' }, 400);
   }
-  mobileOAuthStore.delete(state);
+
+  if (!body.idToken) {
+    return c.json({ error: 'Missing idToken' }, 400);
+  }
 
   try {
-    const tokenResponse = await fetch('https://auth.theflux.life/application/o/token/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        code,
-        redirect_uri: `${config.apiBaseUrl}/api/v1/auth/callback/mobile`,
-      }),
+    // Verify Google ID token via Google's JWKS
+    const googleJwks = jose.createRemoteJWKSet(
+      new URL('https://www.googleapis.com/oauth2/v3/certs')
+    );
+    const { payload } = await jose.jwtVerify(body.idToken, googleJwks, {
+      issuer: ['https://accounts.google.com', 'accounts.google.com'],
+      audience: config.googleClientId,
     });
 
-    if (!tokenResponse.ok) {
-      const error = await tokenResponse.text();
-      console.error('Mobile token exchange failed:', error);
-      return c.json({ error: 'Token exchange failed' }, 400);
+    const email = payload.email as string;
+    const name = payload.name as string | undefined;
+    const googleSub = payload.sub as string;
+
+    if (!email) {
+      return c.json({ error: 'No email in Google token' }, 400);
     }
 
-    const tokens = await tokenResponse.json() as {
-      access_token: string;
-      id_token: string;
-      expires_in: number;
-    };
+    // Look up existing user by email (may have been created via web/Authentik login)
+    const existing = await lookupUserByEmail(email);
 
-    const jwks = await getJwks();
-    const { payload } = await jose.jwtVerify(tokens.id_token, jwks, {
-      issuer: config.issuer,
-      audience: config.clientId,
-    });
+    let userSub: string;
 
-    if (payload.nonce !== stored.nonce) {
-      return c.json({ error: 'Invalid nonce' }, 400);
+    if (existing) {
+      // Existing user — keep their original sub, just update name
+      userSub = existing.sub;
+      await sql`UPDATE users SET name = COALESCE(${name || null}, name), updated_at = NOW() WHERE id = ${existing.id}`;
+    } else {
+      // New user — create with google-prefixed sub
+      userSub = `google:${googleSub}`;
+      await sql`
+        INSERT INTO users (sub, email, name)
+        VALUES (${userSub}, ${email}, ${name || null})
+      `;
     }
 
-    await upsertUser({
-      type: 'human',
-      sub: payload.sub,
-      email: payload.email as string | undefined,
-      name: payload.name as string | undefined,
-      preferred_username: payload.preferred_username as string | undefined,
-    });
+    // Sign our own JWT (30-day expiry)
+    const secret = new TextEncoder().encode(config.sessionSecret);
+    const expiresIn = 30 * 24 * 60 * 60;
+    const token = await new jose.SignJWT({
+      sub: userSub,
+      email,
+      name: name || null,
+      type: 'luby_session',
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime(`${expiresIn}s`)
+      .sign(secret);
 
-    // Redirect to mobile app via deep link with the access token
-    // Redirect to mobile app via deep link with the access token
-    const deepLink = `net.myluby.app://auth/callback?token=${encodeURIComponent(tokens.access_token)}&expires_in=${tokens.expires_in}`;
-    
-    // Return HTML page that redirects via JS — HTTP 302 with custom schemes
-    // is blocked by Chrome Custom Tabs on Android
-    return c.html(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Redirecting...</title></head>
-<body style="font-family:system-ui;text-align:center;padding:40px">
-<p>Signing you in...</p>
-<script>window.location.href="${deepLink}";</script>
-<p style="margin-top:20px"><a href="${deepLink}">Tap here if not redirected</a></p>
-</body></html>`);
-
+    console.log(`Google Sign-In: ${email} (${existing ? 'existing' : 'new'} user)`);
+    return c.json({ token, expiresIn });
   } catch (error) {
-    console.error('Mobile OAuth callback error:', error);
-    return c.json({ error: 'Authentication failed' }, 500);
+    console.error('Google Sign-In error:', error);
+    return c.json({ error: 'Authentication failed' }, 401);
   }
 });
 
 // GET /auth/logout
 authRoutes.get('/logout', (c) => {
   const config = getConfig();
-
   setCookie(c, 'luby_session', '', {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'None',
-    domain: '.myluby.net',
-    maxAge: 0,
-    path: '/',
+    httpOnly: true, secure: true, sameSite: 'None',
+    domain: '.myluby.net', maxAge: 0, path: '/',
   });
-
   return c.redirect(config.frontendUrl);
 });
 
-// GET /auth/me - Get current user
+// GET /auth/me
 authRoutes.get('/me', (c) => {
   const auth = c.get('auth');
-
-  if (!auth?.user) {
-    return c.json({ user: null });
-  }
-
+  if (!auth?.user) return c.json({ user: null });
   return c.json({
     user: {
       sub: auth.user.sub,
