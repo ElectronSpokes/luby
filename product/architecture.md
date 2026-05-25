@@ -1,6 +1,6 @@
 # Architecture
 *Maintained by: Ruairidh (CTO) + Cleireach*
-*Last updated: 2026-04-15*
+*Last updated: 2026-05-25*
 
 ## Overview
 
@@ -52,10 +52,10 @@ Dual auth paths converging on the same users table:
 | **Plugin** | — | `@capgo/capacitor-social-login` |
 | **Flow** | Redirect → callback → session cookie | Native popup → ID token → `POST /auth/google-signin` → Luby JWT |
 | **Token** | Authentik access token in `luby_session` cookie | HS256 JWT (30-day, signed with `SESSION_SECRET`) |
-| **Validation** | Authentik JWKS verification | Google JWKS verification (no audience check — Android client ID differs from web) |
-| **User matching** | By `sub` claim | By email (matches existing Authentik accounts) |
+| **Validation** | Authentik JWKS verification | Google JWKS verification (no audience check — Android client ID differs from web; see DD-14) |
+| **User matching** | By `sub` claim | By email — `lookupUserByEmail()` (see DD-15) |
 
-Auth middleware chains both: tries Authentik JWT first, then Luby JWT, then session cookie.
+**Middleware chain.** Each request runs through the auth middleware in order: Authentik JWT → Luby JWT → session cookie. The first successful validation populates the request user and short-circuits the chain; if all three fail, the request continues as anonymous and any downstream route requiring auth returns 401. No anonymous fallback for protected routes — every route that touches per-user data asserts an authenticated user explicitly.
 
 ## Components
 
@@ -84,7 +84,11 @@ cd android && ./gradlew assembleDebug
 - OpenJDK 21
 - Android SDK at `/home/johnthomson/android-sdk`
 - Gradle via wrapper (`android/gradlew`)
-- iOS builds require Mac Mini M4 (10.0.15.10)
+
+**iOS scaffold:**
+- `ios/` directory is present in the repo (scaffolded via `npx cap add ios`)
+- No build has been produced from this host — iOS builds require Mac Mini M4 (10.0.15.10) for `pod install` + Xcode
+- Pipeline on Mac: `git pull && npm run build && npx cap sync && pod install && (build via Xcode/CLI)`
 
 ### API (port 3001)
 
@@ -105,6 +109,28 @@ cd android && ./gradlew assembleDebug
 | `/api/v1/chat/*` | Chat message history |
 | `/api/v1/ai/*` | 7 Gemini proxy endpoints |
 | `/download/app.apk` | Debug APK download (temporary, no auth) |
+
+### Data Schema
+
+Single PostgreSQL 16 database on `10.0.110.27:5432`. Schema lives in `api/migrations/001-initial-schema.sql` (single file per DD-7). Runner is `api/src/db/migrate.ts`, applied on API startup before serving. End-to-end data flows (logging, AI scanning, coaching, chat, auth, deploy) are documented in `product/data-flow.md` — not duplicated here.
+
+| Table | Purpose | Key columns / constraints |
+|-------|---------|---------------------------|
+| `users` | Accounts; dual-auth (Authentik + Google) | `id SERIAL PK`, `sub TEXT UNIQUE NOT NULL`, `email TEXT`, `name TEXT`, `created_at`, `updated_at` |
+| `food_entries` | Manual + AI-scanned food logs with macros | `user_id FK`, `name`, `calories/protein/fiber/carbs/fat/sugar NUMERIC`, `timestamp BIGINT (epoch ms)` |
+| `hydration_entries` | Water intake | `user_id FK`, `amount NUMERIC`, `timestamp BIGINT` |
+| `movement_entries` | Activity logs | `user_id FK`, `type`, `duration NUMERIC`, `intensity CHECK IN ('low','medium','high')`, `timestamp BIGINT` |
+| `fasting_sessions` | Active + completed fasting timers | `user_id FK`, `start_time/end_time BIGINT`, `target_duration NUMERIC`, `status CHECK IN ('active','completed')` |
+| `meal_plans` | One row per day of an AI meal plan | `user_id FK`, `day TEXT`, `meals JSONB` |
+| `shopping_items` | Shopping list (optionally tied to a meal plan) | `user_id FK`, `meal_plan_id FK ON DELETE SET NULL`, `name`, `category`, `checked BOOLEAN` |
+| `recipes` | Saved AI recipe results | `user_id FK`, `name`, `description`, `ingredients/instructions JSONB`, macros NUMERIC |
+| `coaching_plans` | AI-generated daily plans | `user_id FK`, `date TEXT`, `focus`, `eating_steps/movement_steps JSONB`, **`UNIQUE(user_id, date)`** |
+| `chat_messages` | Chat history with Luby persona | `user_id FK`, `role CHECK IN ('user','assistant')`, `content TEXT`, `timestamp BIGINT` |
+| `_migrations` | Migration tracking meta-table | `name TEXT UNIQUE NOT NULL`, `applied_at` |
+
+**Indexes:** All per-user time-series tables carry a `(user_id, timestamp)` composite index for fast latest-N queries; `coaching_plans` has `(user_id, date)`; per-user single-list tables (`fasting_sessions`, `meal_plans`, `shopping_items`, `recipes`) have `(user_id)`. See migration file for exact index DDL.
+
+**Notable shape:** All entity tables use UUID PKs except `users` (SERIAL) and `_migrations` (SERIAL). All timestamps in entity tables are `BIGINT` epoch-milliseconds (client-supplied), not `TIMESTAMPTZ` (server-side); `created_at` audit timestamps are `TIMESTAMPTZ DEFAULT NOW()`. The `users.sub` column is `UNIQUE NOT NULL` but `users.email` has no UNIQUE constraint — see DD-15 for the email-matching interaction.
 
 ### AI Endpoints
 
@@ -132,10 +158,12 @@ cd android && ./gradlew assembleDebug
 
 ## Key Decisions
 
-| Decision | Choice | Why |
-|----------|--------|-----|
-| Google Sign-In over Authentik for mobile | Native SDK | Deep-link OAuth was fragile (Chrome Custom Tabs blocked redirects, cookies didn't persist). Native Google Sign-In is one tap, no browser |
-| Static import for Capacitor plugins | `import { SocialLogin }` not `await import()` | Dynamic imports hang in production-bundled WebView — Vite bundles the web polyfill, native bridge can't intercept |
-| No JWT audience check | Verify signature only | Android Google Sign-In issues tokens with Android client ID as audience, not web client ID. Signature verification against Google JWKS is sufficient |
-| Email-based user matching | `lookupUserByEmail()` | Google Sign-In users may already have Authentik accounts — match by email to avoid duplicate user records |
-| Open CORS | `origin: (origin) => origin` | Capacitor WebView origin varies by platform and build type. Tightening deferred until all origins are catalogued |
+*Full rationale + status for each: see `product/decisions.md` (DD-N entries).*
+
+| Decision | Choice | DD |
+|----------|--------|----|
+| Google Sign-In over Authentik for mobile | Native SDK (no deep-link OIDC) | DD-1 |
+| Static import for Capacitor plugins | `import { SocialLogin }` not `await import()` — dynamic imports hang in production WebView | DD-13 |
+| No JWT audience check on Google tokens | Verify signature only — Android `aud` differs from web | DD-14 |
+| Email-based user matching on Google Sign-In | `lookupUserByEmail()` to avoid duplicate accounts | DD-15 |
+| Open CORS | `origin: (origin) => origin` — tightening deferred until all Capacitor origins catalogued | DD-16 |
