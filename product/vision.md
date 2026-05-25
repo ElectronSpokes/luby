@@ -1,4 +1,6 @@
 # Vision
+*Maintained by: Cleireach*
+*Last updated: 2026-05-25*
 
 ## Problem
 

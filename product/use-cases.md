@@ -1,6 +1,6 @@
 # Use Cases — Luby
-
-> Last updated: 2026-04-15
+*Maintained by: Cleireach*
+*Last updated: 2026-05-25*
 
 ## Overview
 
@@ -168,7 +168,7 @@ Luby is a personal wellness companion that replaces a stack of bloated health ap
 
 **Consumer**: 48k — wants to log health data wherever they are, not just at a desk.
 
-**Situation today**: Production APK installed on Android via debug build. Google Sign-In for auth (native popup, no browser redirect). Frontend bundled in APK, API calls go through Cloudflare Tunnel. Works anywhere with internet.
+**Situation today**: Debug-signed APK installed on Android device. Google Sign-In for auth (native popup, no browser redirect). Frontend bundled in APK, API calls go through Cloudflare Tunnel. Works anywhere with internet. Production-signed APK + Play Store distribution still pending (see Roadmap P1).
 
 **What they need**:
 - App on their phone (home screen, not a bookmark)
@@ -207,7 +207,7 @@ Luby is a personal wellness companion that replaces a stack of bloated health ap
 
 **Consumer**: 48k — wants to know if they're making progress.
 
-**Situation today**: Not built yet. Recharts is in dependencies but not wired. No historical views, no weekly summaries.
+**Situation today**: Partial — basic recharts `BarChart` of the last 7 food entries shipped in `App.tsx`. No multi-domain charts (hydration, movement, fasting), no weekly/monthly summaries, no trend lines, no AI-generated weekly recap.
 
 **What they need**:
 - Weekly/monthly charts of food intake, hydration, movement

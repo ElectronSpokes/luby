@@ -1,6 +1,6 @@
 # Luby — Operating Model
 *Maintained by: Cleireach*
-*Last updated: 2026-04-12*
+*Last updated: 2026-05-25*
 
 ---
 
@@ -30,25 +30,26 @@ cosmogenic.org          <- philosophy
 No Docker on this VM. Pure native: Bun process + system PostgreSQL.
 
 Codebase: `/opt/luby`
-Env: `/opt/luby/api/.env` (gitignored, secrets from Vault at startup)
+Env: `/opt/luby/api/.env` (gitignored, secrets from Vault at startup via AppRole; `.env` carries the Vault bootstrap creds + dev fallback values)
 Memory footprint: ~85 MB resident (Bun process)
 Security: `ProtectSystem=strict`, `NoNewPrivileges=true` in systemd unit
 
 ### Frontend (Cloudflare Pages)
 
 - Domain: `myluby.net` + `www.myluby.net`
-- Deploy: Gitea push mirror -> GitHub (`ElectronSpokes/luby`) -> CF Pages auto-build
-- Build-time env: `VITE_API_URL` defaults to `http://10.0.110.27:3001`
+- Deploy: Forgejo push mirror → GitHub (`ElectronSpokes/luby`) → CF Pages auto-build
+- Build-time env: `VITE_API_URL=https://api.myluby.net` (in both `.env` and `.env.production`), baked into `dist/` at Vite build time. Verify with `grep 'api.myluby.net' dist/assets/index-*.js`.
 
 ### Mobile (Capacitor 8)
 
 - Bundle: `net.myluby.app`
-- Build machine: Mac Mini M4 (10.0.15.10)
-- Deploy: `git pull && npm run build && npx cap sync` on Mac Mini
+- Android build: on the VM (10.0.110.27) — OpenJDK 21 + Android SDK at `/home/johnthomson/android-sdk`. `npm run build && npx cap sync android && cd android && ./gradlew assembleDebug`.
+- iOS build: on Mac Mini M4 (10.0.15.10) — `git pull && npm run build && npx cap sync && pod install`, then Xcode build / TestFlight submission.
+- iOS and Android scaffolds (`ios/`, `android/`) are both present in the repo.
 
 ### External exposure
 
-- `api.myluby.net` -> Cloudflare Tunnel (`5bc61fcb`) -> `http://10.0.110.27:3001`
+- `api.myluby.net` → Cloudflare Tunnel (`5bc61fcb`) → `http://10.0.110.27:3001`
 - CF Zone: `5263f84ac5711ed347deed5f337f8c4a`
 
 ### Remote dependencies
@@ -67,12 +68,13 @@ Security: `ProtectSystem=strict`, `NoNewPrivileges=true` in systemd unit
 
 | What | How |
 |------|-----|
-| Frontend | Edit in `/opt/luby/web`, `git push` -> auto-deploys via CF Pages |
+| Frontend | Edit in `/opt/luby/src/` (React) + `/opt/luby/index.html`, `git push` → auto-deploys via CF Pages |
 | API | SSH to 10.0.110.27, edit code, `sudo systemctl restart luby-api` |
-| Database | Migration files in `api/src/db/migrations/`, auto-run on API startup |
-| Mobile | Build on Mac Mini M4, `npx cap sync`, TestFlight/Play submission |
+| Database | Migration files in `api/migrations/`, runner at `api/src/db/migrate.ts`, auto-run on API startup |
+| Mobile (Android) | Build on VM (npm + cap sync + gradlew), install debug APK on device |
+| Mobile (iOS) | Build on Mac Mini M4 (cap sync + pod install + Xcode), TestFlight/Play submission |
 
-No CI/CD pipeline. Frontend is automatic on push. API requires manual restart. Mobile requires Mac.
+No CI/CD pipeline. Frontend is automatic on push. API requires manual restart. Mobile requires either VM (Android) or Mac (iOS).
 
 ---
 
@@ -81,9 +83,9 @@ No CI/CD pipeline. Frontend is automatic on push. API requires manual restart. M
 | Platform | Method | Token storage |
 |----------|--------|---------------|
 | Web | Authentik OIDC (`auth.theflux.life`) | `luby_session` httpOnly cookie on `.myluby.net` |
-| Mobile | Google Sign-In SDK -> own HS256 JWT (30-day) | Capacitor Preferences (`auth_token`) |
+| Mobile | Google Sign-In SDK → own HS256 JWT (30-day) | Capacitor Preferences (`auth_token`) |
 
-Both paths validate against the same `users` table. Auth middleware checks cookie first, then Bearer header.
+Both paths validate against the same `users` table. Auth middleware chains Authentik JWT → Luby JWT → session cookie; first success short-circuits, all-fail = anonymous. See `product/decisions.md` DD-1, DD-2, DD-14, DD-15 for rationale.
 
 ---
 
@@ -114,7 +116,7 @@ None. All AI calls are on-demand and synchronous. No Celery, no cron.
 | Git repos | Forgejo |
 | DNS/CDN | Cloudflare |
 | Infrastructure | HALINOVA |
-| Mobile builds | Mac Mini M4 (10.0.15.10) |
+| iOS builds | Mac Mini M4 (10.0.15.10) |
 
 ---
 
@@ -122,5 +124,7 @@ None. All AI calls are on-demand and synchronous. No Celery, no cron.
 
 *Consolidated from:*
 - `CLAUDE.md` — implementation details
-- `product/architecture.md` — system design, auth flow
+- `product/architecture.md` — system design, auth flow, Data Schema
+- `product/decisions.md` — DD-N entries (rationale, status, watch-fors)
 - `product/context.md` — current health and momentum
+- `product/data-flow.md` — end-to-end data flows

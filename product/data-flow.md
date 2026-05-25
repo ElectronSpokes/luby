@@ -1,6 +1,6 @@
 # Luby — Data Flow
 *Maintained by: Cleireach*
-*Last updated: 2026-04-12*
+*Last updated: 2026-05-25*
 *Companion to: product/operating-model.md (who runs what), product/architecture.md (system design)*
 
 ---
@@ -217,7 +217,7 @@ Ready to serve
 ```
 Frontend:
   git push origin main (on Luby VM or locally)
-    -> Gitea auto-mirrors to GitHub (sync_on_commit)
+    -> Forgejo auto-mirrors to GitHub (sync_on_commit)
       -> GitHub -> CF Pages auto-build
         -> Live at myluby.net
 
@@ -227,10 +227,16 @@ API:
       -> sudo systemctl restart luby-api
         -> migrations auto-run on startup
 
-Mobile:
+Mobile (Android):
+  On the VM (10.0.110.27)
+    -> npm run build && npx cap sync android
+      -> cd android && ./gradlew assembleDebug
+        -> debug APK installed on device
+
+Mobile (iOS):
   Mac Mini M4 (10.0.15.10)
-    -> git pull && npm run build && npx cap sync
-      -> TestFlight / Play Store submission
+    -> git pull && npm run build && npx cap sync && pod install
+      -> Xcode build -> TestFlight submission
 ```
 
 ---
@@ -254,4 +260,6 @@ Mobile:
 - `product/architecture.md` — system design, auth flow, AI integration
 - `CLAUDE.md` — API routes, deployment details
 - `api/src/routes/` — route handlers
-- `api/src/db/migrations/` — schema definitions
+- `api/migrations/` — schema definitions (single file: `001-initial-schema.sql`)
+- `api/src/db/migrate.ts` — migration runner (applied on API startup)
+- `product/decisions.md` — DD-N entries for auth, secrets, schema choices
