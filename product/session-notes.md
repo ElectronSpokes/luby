@@ -7,6 +7,80 @@
 
 <!-- newest first -->
 
+### 2026-05-26 — P0 F-Droid Distribution Wave 4 + Wave 5 closed end-to-end; v1 SHIPPED on real device
+
+**Active task:** N/A — session closed cleanly at `/park`. All 22 tasks landed. Outstanding tail (physical USB delivery of offsite GPG blob) is deferred but does not gate anything.
+
+**Pending user asks:** None.
+
+**In progress:** Nothing. Spec v1 SHIPPED — Luby installable + updatable via household F-Droid at `https://fdroid.myluby.net/repo`, verified end-to-end on 48k's Pixel (install + in-place update + session preservation).
+
+**Blocked:** Nothing technical. Physical USB delivery of `halinova:~/keystore-backups/luby-release-2026-05-26.gpg` deferred but pending (catastrophic-loss survivability for APK keystore; blob ready, awaits USB copy + offsite drop).
+
+**Decisions:**
+- **D-RE1-DROP-ZONE-ONLY** — RE-1 test-fire used a `feat/release-test` branch with the workflow edited to scp into `/srv/fdroid-luby/repo-staging/` and skip the `fdroid update` + NFR-3 verify steps. Acceptance terminates at scp per spec. First fdroid update on prod fired at RE-2. Smallest deviation from prod workflow; least gateway-side persistent infra.
+- **D-CADDY-NO-CACHE-FDROID-META** — Caddy vhost on infra-gateway now sets `Cache-Control: no-cache, no-store, must-revalidate` for `/repo/index*`, `/repo/entry.*`, `/repo/diff/*`. APKs keep default 4h cache (immutable content-hashed). Resolves CF edge-cache staleness that surfaced during RE-4; future fires self-invalidate at the edge.
+- **D-RE4-TRIVIAL-COMMIT-AS-CHANGELOG** — RE-4 needed a trivial commit to bump versionCode; chose to seed root `CHANGELOG.md` rather than touch existing `README.md` (latter is the generic northernlights template, not Luby-specific — surfaced as Maintenance & Watch row).
+- **D-PUSH-LANDING** — luby/main 4 closure commits pushed direct to origin/main. Halinova feat/lubby1 rebased onto current origin/main and FF-merged into main + branch deleted on origin. Worktree retained for any spec follow-on; not closed.
+- `/simplify deferred — reason: skill not installed on this satellite` (same situation as TD-PARK-SIMPLIFY-1 from S3). Already captured as TD-PARK-SIMPLIFY-2 in spec/luby/fdroid-distribution/tech-debt.md, naming the one unreviewed code-touching commit (luby `5d3d992` CL-1 route removal, 15-line deletion of a deprecated dev-distribution handler).
+
+**Relevant files:**
+- `ssh johnthomson@10.0.110.27:/opt/luby/api/src/index.ts` (CL-1: removed `/download/app.apk` handler, 15 lines deleted)
+- `ssh johnthomson@10.0.110.27:/opt/luby/product/roadmap.md` (CL-2: P0 closed + Mobile App row + Maintenance & Watch row for README template finding)
+- `ssh johnthomson@10.0.110.27:/opt/luby/product/decisions.md` (CL-3: DD-12 Status: Closed)
+- `ssh johnthomson@10.0.110.27:/opt/luby/CHANGELOG.md` (NEW, seeded with v0.1.0 + v0.1.1 entries for RE-4 trivial-commit)
+- `ssh johnthomson@10.0.100.4:/home/johnthomson/infra-gateway/Caddyfile` (Cache-Control no-cache override for Luby F-Droid index/entry/diff paths; backup `.pre-cachefix-2026-05-26` retained)
+- `ssh johnthomson@10.0.100.4:/srv/fdroid-luby/repo/{index-v2.json,entry.jar,index-v1.jar,net.myluby.app_39.apk,net.myluby.app_40.apk,...}` (live F-Droid repo state — both APKs in catalogue, index lists both versions)
+- `ssh johnthomson@10.0.100.4:/srv/fdroid-luby/repo-staging/` (RE-1 staging dir; empty post-cleanup, retained for future test fires)
+- `/opt/halinova-wt/99a04502/spec/luby/fdroid-distribution/{status.md,tech-debt.md}` (Wave 4 + Wave 5 entries + 2 new TD rows: TD-CF-CACHE-INVALIDATION-AFTER-FDROID-UPDATE [closed], TD-PARK-SIMPLIFY-2 [open])
+- `~/.claude/projects/-opt-luby/memory/patterns-fdroid-distribution.md` (added F-Droid + CF cache + no-basicauth pattern)
+
+**Cross-project references:**
+- **halinova** — Wave 4 + Wave 5 status + 2 new TD rows landed on spec at `/opt/halinova/spec/luby/fdroid-distribution/`. Branch `feat/lubby1` rebased onto current origin/main (was 22+ commits behind from concurrent S150-S152 activity) then FF-merged into main as `180b4d3`; branch deleted on origin. Worktree `/opt/halinova-wt/99a04502` retained for any spec follow-on. See `/opt/halinova/product/session-notes.md` for HALINOVA's own log.
+- **infra-gateway (10.0.100.4)** — Caddyfile patched with Cache-Control override for Luby F-Droid index/entry/diff paths (verified live: `index-v2.json` now returns `no-cache, no-store, must-revalidate`; APK paths still `max-age=14400`). Backup `Caddyfile.pre-cachefix-2026-05-26` retained. `docker-compose restart caddy` required (reload-via-exec doesn't inherit env_file vars; captured behaviour for future Caddy ops). Also created `/srv/fdroid-luby/repo-staging/` dir for RE-1 (empty post-cleanup, retained).
+- **dogfood** — used as reference for fdroidserver workflow + Caddy vhost pattern throughout; surfaced one cross-product latent finding worth banking: dogfood's `fdroid.dogfood.band` vhost has the same `browse off` directive that's silently broken under Caddy v2 — currently masked by basicauth. Captured as TD-DOGFOOD-CADDY-BROWSE-OFF-LATENT in luby spec's tech-debt.md (from prior S3); revisit when dogfood Caddyfile is next touched.
+
+**Uncommitted:** Clean across both luby and halinova worktree at session-note write time (session-note commit + push lands as the final step of /park).
+
+**Commits in this session:**
+
+luby/main (5 commits, all pushed to origin/main):
+- `774b319` docs: seed CHANGELOG with v0.1.0 + v0.1.1 entries
+- `5d3d992` chore(api): remove /download/app.apk dev distribution route
+- `e52b981` docs(roadmap): close P0 F-Droid Distribution
+- `4043736` docs(decisions): close DD-12 — APK served from API
+- `90a85ba` docs(roadmap): add Maintenance & Watch row for stale README template
+
+luby tags (live, on origin):
+- `v0.1.0` → ec07d7b (RE-2 production fire; CI 1063, 4min 10s)
+- `v0.1.1` → 774b319 (RE-4 update flow; CI 1066, 4min 9s)
+
+luby tags (created + deleted during session):
+- `v0.0.0-test` → 48fd8a8 on `feat/release-test` (RE-1 test fire; CI 1062, 3min 52s) — tag + branch + staging APK all cleaned up post-success
+
+halinova/main (1 commit, FF'd + pushed):
+- `180b4d3` implement(luby/fdroid-distribution): Wave 4 + Wave 5 close — v1 SHIPPED (rebased from feat/lubby1 onto current origin/main; was 2c6c77b pre-rebase)
+
+halinova feat/lubby1: deleted on origin; local-only on canonical because worktree holds the ref (harmless).
+
+**Simplify gate (Step 2.5):** `/simplify` skill not installed on this satellite (same as S3). Falls back to `--no-simplify` semantics per gate failure-mode. Unreviewed code-touching commits: luby `5d3d992` (api/src/index.ts, 15-line deletion of `/download/app.apk` handler). Captured in TD-PARK-SIMPLIFY-2 (written THIS session as part of `180b4d3`) with named pickup trigger.
+
+**Next steps:**
+1. **Physical USB delivery (KS-4 tail)** — pull `halinova:~/keystore-backups/luby-release-2026-05-26.gpg` to Windows laptop → copy to USB → deliver offsite (mum's house per dogfood AC-7 precedent). One short session to land catastrophic-loss survivability for the APK keystore.
+2. **Maintenance & Watch sweep** (Luby roadmap) — batch any/all of: Vault-vs-`.env` source-of-truth audit, `@capacitor/cli` 7→8 bump, CORS catalogue (DD-16 watch-for), README rewrite (replace generic northernlights template with Luby-specific intro + pointer to product/ doc set). All small, no external dependencies, parallel-batchable.
+3. **P5 chart expansion** — extend the existing recharts `BarChart` at `App.tsx:536` to cover hydration / movement / fasting trends. Purely additive, no new infrastructure.
+4. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase Cloud Messaging) — external action 48k needs to start to unblock the rest of P1 (iOS + Play Store path).
+5. **Worktree close** (halinova-side) — `/opt/halinova-wt/99a04502` can be reaped via `/worktree --close` or natural cycle. v1 is shipped; no pending spec work expected on this branch.
+
+**Watch for:**
+- **Future F-Droid spec adoption (Spark / Cosmogenic / etc.)** — propagate the Caddy Cache-Control override at vhost authoring time, BEFORE first publication. Without it, every household F-Droid repo without basicauth would silently inherit the 4h CF Browser Cache TTL stall. Captured in patterns-fdroid-distribution.md.
+- **Dogfood Caddy `browse off` latent bug** (TD-DOGFOOD-CADDY-BROWSE-OFF-LATENT) — fix in the same commit if dogfood ever drops basicauth, OR opportunistically when dogfood Caddyfile is next touched. One-line surgical fix.
+- **TD-METADATA-GATEWAY-DRIFT** — if any metadata text edits land before option B (CI workflow extension) lands, remember to manually scp + ssh fdroid update on the gateway. CI workflow only scps APK.
+- **F-Droid client caching at the device side** — even with `no-cache` from origin, the F-Droid client app may have its own short-TTL local cache. Today the manual purge + force-refresh path was needed. If future updates surface delays of 1-2 minutes despite the Caddy fix, that's the device-side cache, not the edge.
+
+---
+
+
 ### 2026-05-26 — P0 F-Droid Distribution Waves 1+2+3 shipped end-to-end (15/22 tasks); live repo + signed APK pipeline ready for Wave 4 release fire
 
 **Active task:** N/A — session closed cleanly at `/park`. Three waves done; Wave 4 (Release Fire) is the next step.
