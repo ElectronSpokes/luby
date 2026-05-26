@@ -34,21 +34,6 @@ app.use('*', cors({
 // Health check (no auth)
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// Temporary: serve APK for development
-app.get('/download/app.apk', async (c) => {
-  const file = Bun.file('/opt/luby/android/app/build/outputs/apk/debug/app-debug.apk');
-  if (!await file.exists()) return c.text('APK not found', 404);
-  const size = file.size;
-  return new Response(file, {
-    headers: {
-      'Content-Type': 'application/vnd.android.package-archive',
-      'Content-Disposition': 'attachment; filename="luby.apk"',
-      'Content-Length': String(size),
-      'Cache-Control': 'no-store',
-    },
-  });
-});
-
 // API router
 const api = new Hono<AppEnv>();
 
