@@ -7,6 +7,75 @@
 
 <!-- newest first -->
 
+### 2026-05-26 — P0 F-Droid Distribution Waves 1+2+3 shipped end-to-end (15/22 tasks); live repo + signed APK pipeline ready for Wave 4 release fire
+
+**Active task:** N/A — session closed cleanly at `/park`. Three waves done; Wave 4 (Release Fire) is the next step.
+
+**Pending user asks:** None.
+
+**In progress:** Nothing. Wave 1 (Infrastructure) + Wave 2 (Keystore Ceremony) + Wave 3 (Build Pipeline) all complete. Wave 4 starts with RE-1 test-fire on a feature branch with `v0.0.0-test` tag.
+
+**Blocked:** Nothing technical. Physical USB delivery of the offsite GPG blob (`halinova:~/keystore-backups/luby-release-2026-05-26.gpg`) is deferred but pending — does NOT gate Wave 4, but should land before RE-3 first-install for catastrophic-loss survivability.
+
+**Decisions made this session (most captured in commit bodies + status.md + tech-debt.md):**
+- Spec deviation captured: Categories `Health & Fitness` (spec FR-14, Google Play's name) → `Sports & Health` (f-droid canonical category; lint complains anyway due to fdroidserver 2.4.4 schema-load bug)
+- IN-1 no-op finding: existing `luby-app` Vault policy already grants `create+list+read+update` on `secret/data/luby/*` (wildcard) — release-keystore path auto-covered when KS-3 wrote it; no policy edit needed; mild deviation from FR-9's "narrowed read-only" wording accepted per BU-4 v1-reuse note
+- IN-6 SSH key NOT restricted via `from=` / `command=` per user direction (parity with dogfood's `INFRA_GATEWAY_SSH_KEY_B64` pattern)
+- BU-1 false starts converged on dogfood's exact gradle pattern: `(... ?: '1') as Integer` for versionCode + hoisted `def hasReleaseKeystore` for clean ternary
+- Three operational learnings worth memory-routing (see Compound below): PKCS12 storepass==keypass invariant, PowerShell `>` mangles binary GPG output, Caddy v2 `browse off` is mis-parsed (latent in dogfood)
+- Push decisions per-commit (luby Wave 3 commit → push; halinova feat/lubby1 → leave local)
+
+**Relevant files:**
+- `ssh johnthomson@10.0.110.27:/opt/luby/android/app/build.gradle` (BU-1 release signing + version injection)
+- `ssh johnthomson@10.0.110.27:/opt/luby/metadata/net.myluby.app.yml` + `net.myluby.app/en-US/{short_description.txt,full_description.txt,icon.png}` (BU-2)
+- `ssh johnthomson@10.0.110.27:/opt/luby/.forgejo/workflows/release-apk.yaml` (BU-3, 218L, 15 steps)
+- `ssh johnthomson@10.0.110.27:/opt/luby/product/session-notes.md` (this entry)
+- `/opt/halinova/spec/luby/fdroid-distribution/{status.md,tech-debt.md,ceremony-evidence/README.md,ceremony-evidence/2026-05-26-recovery.log,ceremony-evidence/2026-05-26-recovery.jar}` (halinova-side spec artefacts)
+- `/opt/halinova/.gitignore` (Wave 2: narrow `!spec/*/*/ceremony-evidence/*.log` exception)
+- `halinova:~/keystore-backups/luby-release-2026-05-26.gpg` (KS-4 offsite GPG blob, awaiting USB)
+- `ssh johnthomson@10.0.100.4:/srv/fdroid-luby/{config.yml,keystore.p12,repo/index-v2.json,metadata/net.myluby.app.yml}` (gateway: F-Droid workspace + signed index + metadata pre-staged)
+- `ssh johnthomson@10.0.100.4:/home/johnthomson/infra-gateway/{Caddyfile,docker-compose.yml}` (Wave 1 IN-3: Luby vhost + bind mount; backups `.pre-luby` retained)
+- `ssh -i ~/.cloudflared.key root@10.0.20.4:/etc/cloudflared/config.yml` (Wave 1 IN-2: tunnel ingress addition for `fdroid.myluby.net`; backup `config.yml.bak.*` retained on tunnel host)
+- `ssh johnthomson@10.0.110.23:~/.gnupg/` (Wave 2 KS-5: 48k's GPG private key imported for recovery ceremony — survives across waves)
+- Vault `secret/data/luby/release-keystore` (KS-3: 4 fields — storeFile/storePassword/keyAlias/keyPassword)
+- Forgejo Actions secrets on `halinova/luby`: `FDROID_SCP_KEY`, `VAULT_ADDR`, `VAULT_APPROLE_ROLE_ID`, `VAULT_APPROLE_SECRET_ID`
+
+**Cross-project references:**
+- **halinova** — spec set at `/opt/halinova/spec/luby/fdroid-distribution/` advanced with 4 commits on `feat/lubby1` branch (worktree `/opt/halinova-wt/99a04502`): `cdd5501` Wave 1 close + `bdb79a3` GPG pre-check + `13b4ae0` Wave 2 close (ceremony-evidence + .gitignore exception) + `48fbda7` Wave 3 close (status + 2 new TD rows). First three pushed to `origin/feat/lubby1`; **48fbda7 left local per user's explicit decision this session**. Spec is the canonical source-of-truth for waves; status.md tracks per-task findings. See `/opt/halinova/product/session-notes.md` for HALINOVA's own log.
+- **dogfood** — used as canonical reference throughout (Caddyfile vhost shape, Forgejo workflow template, gradle signingConfigs pattern, GPG offsite-USB precedent). Surfaced one latent bug to capture on dogfood's side: `TD-DOGFOOD-CADDY-BROWSE-OFF-LATENT` in Luby's spec/tech-debt.md (Caddy v2 mis-parses `browse off` as a template path; dogfood is currently masked by basicauth firing first). Worth fixing next time dogfood Caddyfile is touched.
+- **infra-gateway (10.0.100.4)** — `/srv/fdroid-luby/` workspace created (Wave 1 IN-4) + Caddyfile vhost added (IN-3, NO basicauth) + bind mount added to docker-compose.yml (IN-3) + workspace populated by KS-2 (`fdroid init` direct via keytool) + metadata pre-staged (BU-2) + signed `index-v2.json` reachable at `https://fdroid.myluby.net/repo/index-v2.json` (HTTP 200). All artefacts owned by `johnthomson:johnthomson` mode 0600.
+- **cloudflare-tunnel (10.0.20.4)** — tunnel ingress rule for `fdroid.myluby.net → http://10.0.100.4:80` added (Wave 1 IN-2). Brief ~3s outage across all tunnel hostnames during systemctl restart. Steady-state config `/opt/halinova/config/steady-state/cloudflared.yaml` says `ssh_reachable: false` from VLAN 110 but it actually IS reachable — worth correcting in a future halinova doc pass.
+- **bones (10.0.110.23)** — 48k's GPG private key imported (Wave 2 KS-5 pre-check) via 2-hop (Windows → HALINOVA → Bones, ASCII-armored, ssh -t for pinentry). Bones can now run recovery ceremonies for ANY product's catastrophic-loss blob in future (luggage, luby, future ones).
+
+**Uncommitted:** Clean across all touched repos. Halinova worktree has 1 commit (48fbda7) ahead of origin/feat/lubby1 — left local per user's explicit decision. Luby commit `1d81f68` pushed to `origin/main`.
+
+**Commits in this session:**
+- luby `1d81f68` implement(fdroid-distribution): Wave 3 BU-1/BU-2/BU-3 build pipeline (on `main`, pushed)
+- halinova `cdd5501` implement(luby/fdroid-distribution): Wave 1 — 6/6 infra tasks landed end-to-end (on `feat/lubby1`, pushed)
+- halinova `bdb79a3` implement(luby/fdroid-distribution): Wave 2 GPG pre-check — Bones key imported (on `feat/lubby1`, pushed)
+- halinova `13b4ae0` implement(luby/fdroid-distribution): Wave 2 — 5/5 keystore-ceremony tasks landed (on `feat/lubby1`, pushed)
+- halinova `48fbda7` implement(luby/fdroid-distribution): Wave 3 close — status + 2 new TD rows (on `feat/lubby1`, **LOCAL ONLY** per user)
+
+**Simplify gate (Step 2.5):** `/simplify` skill not installed on this satellite. Falls back to `--no-simplify` semantics per gate failure-mode. Unreviewed code-touching commits: luby `1d81f68` (build.gradle + metadata YAML + .forgejo/workflows/release-apk.yaml) + halinova worktree `13b4ae0` (.gitignore single-line exception; other paths in that commit under `spec/**` are doc-allowlisted). Captured as TD-PARK-SIMPLIFY-1 in `/opt/halinova/spec/luby/fdroid-distribution/tech-debt.md` with named pickup trigger (first iteration of BU-3 during RE-1 test-fire).
+
+**Next steps:**
+1. **RE-1 test-fire** — create a feature branch on `halinova/luby` (e.g. `feat/release-test`), tag `v0.0.0-test`, push to trigger the BU-3 workflow. Watch CI run end-to-end against a STAGING dir (`/srv/fdroid-luby/repo-staging/`, NOT `/srv/fdroid-luby/repo/`). Per dogfood precedent (CI-1 + FE-20 recovery arcs), expect 2-3 iterations on first run — typically container-image issues, gradle plugin compatibility, or Vault env-var quoting. Delete the throwaway tag post-test.
+2. **RE-2 v0.1.0 production fire** — once RE-1 is clean, tag `v0.1.0` on `main`, push, observe CI to completion. Verify `https://fdroid.myluby.net/repo/index-v2.json` updates within 30s (NFR-3) + APK reachable at `https://fdroid.myluby.net/repo/net.myluby.app_<versionCode>.apk`. This is the live commitment point — KS-5 ceremony already proven (Wave 2 complete).
+3. **RE-3 first install on 48k's Pixel** — uninstall current debug-signed Luby APK → add `https://fdroid.myluby.net/repo` to F-Droid client repositories → install Luby from catalogue → walk Sign-In + food-log + coaching-plan happy paths. Per FR-17.
+4. **RE-4 update flow** — cut `v0.1.1` patch (trivial change, e.g. README comment) → CI publishes → F-Droid client surfaces update → in-place install → verify session preserved (no re-sign-in). Per FR-18, NFR-8.
+5. **Wave 5 closure (CL-1, CL-2, CL-3)** — remove `/download/app.apk` route from `api/src/index.ts` + `systemctl restart luby-api` + verify 404 (CL-1, closes DD-12 watch-for) + tick all P0 task checkboxes in `product/roadmap.md` + update Mobile App row to "Live (Android via household F-Droid, release-signed)" (CL-2) + DD-12 Status: Closed (CL-3).
+6. **Physical USB delivery (KS-4 tail)** — pull `halinova:~/keystore-backups/luby-release-2026-05-26.gpg` to Windows laptop (`scp johnthomson@10.0.110.16:~/keystore-backups/luby-release-2026-05-26.gpg ...`) → copy to USB → deliver offsite (mum's house per dogfood AC-7 precedent). Deferred from KS-4; does not gate Wave 4 but should land before RE-3 first-install for catastrophic-loss survivability.
+7. **Push halinova `48fbda7`** to `origin/feat/lubby1` when ready to batch with Wave 4 commits (left local this session per explicit user decision; one trivial `git push origin feat/lubby1` from `/opt/halinova-wt/99a04502` does it).
+
+**Watch for:**
+- **Wave 4 first-fire iteration** — per dogfood CI-1/FE-20 precedent, BU-3's first live tag will likely surface 2-3 issues. Don't be surprised. Capture broken-tag-no-APK trail per dogfood pattern.
+- **dachief-portfolio-runner availability** — workflow runs on `runs-on: docker` on this shared runner (10.0.110.12). If runner is busy with another job, Luby's run queues. Not a blocker, just a latency consideration.
+- **TD-METADATA-GATEWAY-DRIFT** — if you edit any metadata text (description / icon refresh / categories) before option B (CI workflow extension) lands, remember to manually `scp metadata/* gateway:/srv/fdroid-luby/metadata/` + `ssh fdroid update -c`. CI workflow only scps APK.
+- **Concurrent halinova activity** — another tab advanced canonical's main by ~8 commits during this session (S150-S151 activity per session-notes). Worktree `feat/lubby1` diverged from main accordingly. If FF-merging `feat/lubby1` to main later, rebase first.
+
+---
+
+
 ### 2026-05-26 — P0 F-Droid Distribution: shape + spec + tasks + verifier-pass landed end-to-end (5 commits across halinova + luby)
 
 **Active task:** N/A — session closed cleanly at `/park`. P0 spec fully landed; ready for `/implement luby/fdroid-distribution` Wave 1.
