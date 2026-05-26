@@ -83,7 +83,7 @@
 **Date:** 2026-03
 **Decision:** Debug APK download at `/download/app.apk` on the API for dev distribution.
 **Rationale:** Quick path to install on a device while iterating.
-**Watch for:** Replace with proper distribution (Play Store / F-Droid / signed direct download) before any non-dev use. No auth on this route — fine for dev, not for prod.
+**Status:** Closed 2026-05-26 — replaced by P0 F-Droid Distribution (`/opt/halinova/spec/luby/fdroid-distribution/`). Release-signed APKs now published to `https://fdroid.myluby.net/repo`; the `/download/app.apk` route was removed from `api/src/index.ts` in CL-1.
 
 ---
 
