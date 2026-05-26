@@ -1,0 +1,218 @@
+# Release APK build — fires on v* tags. Pulls the signing keystore from Vault
+# via the existing `luby-app` AppRole (v1 reuse — BU-4 note), builds the
+# Android app with Capacitor + Gradle, scps the signed APK to
+# infra-gateway:/srv/fdroid-luby/repo/, and triggers `fdroid update -c` on
+# the gateway. Builds the SPA + native side in one job.
+#
+# Required Forgejo Actions secrets (set under repo scope on halinova/luby):
+#   VAULT_ADDR                 e.g. https://10.0.25.2:8200
+#   VAULT_APPROLE_ROLE_ID      luby-app role_id (shared with runtime API)
+#   VAULT_APPROLE_SECRET_ID    luby-app secret_id (shared with runtime API;
+#                              spec BU-4 v1-reuse accepted, revisit if CI
+#                              compromise becomes a concern)
+#   FDROID_SCP_KEY             base64-encoded OpenSSH private key
+#                              (luby-fdroid-scp@halinova-forgejo-ci,
+#                              authorized on infra-gateway:~/.ssh/authorized_keys)
+#
+# Runner: dachief-portfolio-runner (10.0.110.12), label `docker` → overridden
+# by container: image: mingc/android-build-box (SDK 34+ / JDK 17+ / Gradle 8+).
+#
+# Tag → version mapping (per D-VERSIONCODE-COMMIT-COUNT, deliberate divergence
+# from dogfood's MAJOR*10000+MINOR*100+PATCH):
+#   versionCode = `git rev-list --count HEAD` at tag commit (monotonic, no caps)
+#   versionName = tag stripped of `v` prefix (`v0.1.0` → `0.1.0`)
+#
+# Spec: /opt/halinova/spec/luby/fdroid-distribution/
+# Differences from dogfood pattern (documented for future cross-product review):
+#   - Vault data shape: storeFile/storePassword/keyAlias/keyPassword
+#     (single base64 field + 3 strings) — dogfood uses keystore_b64 + sha256 +
+#     keystore_password + key_password + key_alias
+#   - APK name: net.myluby.app_<versionCode>.apk
+#   - Workspace path: /srv/fdroid-luby/ (parallel to dogfood's /srv/fdroid/)
+#   - NO version-check endpoint POST step (D-V1-NO-VERSION-CHECK-ENDPOINT)
+#   - NO Matrix ping step (single-user household scope, no need to announce)
+#   - PKCS12 forces storePassword == keyPassword; Vault row + env vars
+#     populate both with the same value (gradle build.gradle handles this)
+
+name: Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: docker
+    container:
+      image: mingc/android-build-box:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need full history for `git rev-list --count HEAD` versionCode formula
+          fetch-depth: 0
+
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - name: Install JS deps
+        run: bun install --frozen-lockfile
+
+      - name: Build SPA
+        run: bun run build
+
+      - name: Cap sync Android
+        run: bunx cap sync android
+
+      - name: Install jq + curl (mingc/android-build-box doesn't ship jq)
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y --no-install-recommends jq curl
+
+      - name: Fetch keystore from Vault
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_APPROLE_ROLE_ID: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
+          VAULT_APPROLE_SECRET_ID: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
+        run: |
+          set -euo pipefail
+
+          login_resp=$(curl -ksS -X POST -w '\n%{http_code}' \
+            --data "{\"role_id\":\"$VAULT_APPROLE_ROLE_ID\",\"secret_id\":\"$VAULT_APPROLE_SECRET_ID\"}" \
+            "$VAULT_ADDR/v1/auth/approle/login")
+          login_status=$(echo "$login_resp" | tail -n1)
+          login_body=$(echo "$login_resp" | sed '$d')
+          if [ "$login_status" != "200" ]; then
+            echo "::error::Vault AppRole login returned HTTP $login_status — check VAULT_APPROLE_SECRET_ID hasn't expired"
+            exit 1
+          fi
+          token=$(echo "$login_body" | jq -er .auth.client_token)
+
+          read_resp=$(curl -ksS -w '\n%{http_code}' -H "X-Vault-Token: $token" \
+            "$VAULT_ADDR/v1/secret/data/luby/release-keystore")
+          read_status=$(echo "$read_resp" | tail -n1)
+          read_body=$(echo "$read_resp" | sed '$d')
+          if [ "$read_status" != "200" ]; then
+            echo "::error::Vault read of secret/data/luby/release-keystore returned HTTP $read_status"
+            exit 1
+          fi
+          secret=$(echo "$read_body" | jq -er .data.data)
+
+          keystore_path="$GITHUB_WORKSPACE/luby-release.p12"
+          echo "$secret" | jq -er .storeFile | base64 -d > "$keystore_path"
+          chmod 600 "$keystore_path"
+
+          # Single-capture-then-mask: parse once, mask before any write surface
+          # so cleartext never lands in $GITHUB_ENV under set -x logging.
+          store_pw=$(echo "$secret" | jq -er .storePassword)
+          key_alias=$(echo "$secret" | jq -er .keyAlias)
+          key_pw=$(echo "$secret" | jq -er .keyPassword)
+          echo "::add-mask::$store_pw"
+          echo "::add-mask::$key_pw"
+
+          echo "LUBY_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+          echo "LUBY_KEYSTORE_PASSWORD=$store_pw" >> "$GITHUB_ENV"
+          echo "LUBY_KEY_ALIAS=$key_alias" >> "$GITHUB_ENV"
+          echo "LUBY_KEY_PASSWORD=$key_pw" >> "$GITHUB_ENV"
+
+          unset secret store_pw key_pw key_alias
+
+          curl -ksS -X POST -H "X-Vault-Token: $token" \
+            "$VAULT_ADDR/v1/auth/token/revoke-self" >/dev/null || true
+          unset token
+
+      - name: Inject version from tag
+        run: |
+          set -euo pipefail
+          tag=${GITHUB_REF#refs/tags/v}
+          if ! [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Tag '$tag' does not match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-PRE"
+            exit 1
+          fi
+          # D-VERSIONCODE-COMMIT-COUNT: monotonic commit count, NOT
+          # MAJOR*10000+MINOR*100+PATCH (dogfood's pattern).
+          version_code=$(git rev-list --count HEAD)
+          echo "LUBY_VERSION_CODE=$version_code" >> $GITHUB_ENV
+          echo "LUBY_VERSION_NAME=$tag" >> $GITHUB_ENV
+          echo "Building versionCode=$version_code versionName=$tag"
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      - name: "APK size gate (NFR-2: ≤ 30 MB) + emit SHA-256"
+        run: |
+          set -euo pipefail
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          size_bytes=$(stat -c%s "$apk")
+          max_bytes=$((30 * 1024 * 1024))
+          sha=$(sha256sum "$apk" | awk '{print $1}')
+          echo "APK size: $size_bytes bytes ($((size_bytes / 1024 / 1024)) MB)"
+          echo "APK SHA-256: $sha"
+          if [ "$size_bytes" -gt "$max_bytes" ]; then
+            echo "::error::APK exceeds NFR-2 size cap ($max_bytes bytes): $size_bytes bytes"
+            exit 1
+          fi
+
+      - name: Stage SSH key for infra-gateway
+        env:
+          FDROID_SCP_KEY: ${{ secrets.FDROID_SCP_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s' "$FDROID_SCP_KEY" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Validate the key parses before any scp/ssh
+          ssh-keygen -l -f ~/.ssh/id_ed25519 >/dev/null
+
+      - name: SCP APK to infra-gateway
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $HOME/.ssh/id_ed25519"
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          dest=/srv/fdroid-luby/repo/net.myluby.app_${LUBY_VERSION_CODE}.apk
+          scp $SSH_OPTS "$apk" johnthomson@10.0.100.4:"$dest"
+          ssh $SSH_OPTS johnthomson@10.0.100.4 "ls -la $dest"
+
+      # D-FDROID-UPDATE-ON-GATEWAY: fdroid update runs ON the gateway (where
+      # the index keystore lives, per FR-6), NOT in this container. CI never
+      # touches /srv/fdroid-luby/keystore.p12.
+      - name: F-Droid update on infra-gateway
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $HOME/.ssh/id_ed25519"
+          ssh $SSH_OPTS johnthomson@10.0.100.4 "cd /srv/fdroid-luby && fdroid update -c"
+
+      # NFR-3: index-v2.json must regenerate within 30s of APK upload. APK
+      # mtime anchors "upload time"; index-v2.json mtime is set by fdroid update.
+      - name: NFR-3 verify — index-v2.json regen within 30s of APK upload
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $HOME/.ssh/id_ed25519"
+          apk_path=/srv/fdroid-luby/repo/net.myluby.app_${LUBY_VERSION_CODE}.apk
+          mtimes=$(ssh $SSH_OPTS johnthomson@10.0.100.4 \
+            "stat -c %Y $apk_path /srv/fdroid-luby/repo/index-v2.json")
+          apk_mtime=$(echo "$mtimes" | head -n1)
+          index_mtime=$(echo "$mtimes" | tail -n1)
+          delta=$((index_mtime - apk_mtime))
+          echo "APK mtime:           $apk_mtime"
+          echo "index-v2.json mtime: $index_mtime"
+          echo "Regen delta:         ${delta}s (NFR-3 budget: 30s)"
+          if [ "$delta" -lt 0 ]; then
+            echo "::error::NFR-3 sanity: index mtime BEFORE APK mtime — fdroid update may not have run"
+            exit 1
+          fi
+          if [ "$delta" -gt 30 ]; then
+            echo "::error::NFR-3 violation: index regenerated ${delta}s after APK upload (budget: 30s)"
+            exit 1
+          fi
+
+      # NFR-4: keystore + SSH key never persist beyond job lifetime.
+      - name: Wipe keystore + SSH key from workspace
+        if: always()
+        run: |
+          rm -f "${LUBY_KEYSTORE_PATH:-}" ~/.ssh/id_ed25519

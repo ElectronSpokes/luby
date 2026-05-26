@@ -1,0 +1,28 @@
+Categories:
+  - Sports & Health
+License: Proprietary
+AuthorName: 48k
+AuthorEmail: johnny.thomson@gmail.com
+WebSite: https://myluby.net
+SourceCode: http://git.theflux.life:3000/halinova/luby
+IssueTracker: http://git.theflux.life:3000/halinova/luby/issues
+Summary: AI-coached wellness companion (food, hydration, movement, fasting, chat)
+Description: |-
+  Luby is a simple, AI-coached wellness companion. One app for food
+  logging (with camera-based scanning), hydration, movement, fasting
+  sessions, meal plans, recipes, and conversational coaching.
+
+  Built on the "simple, smart, complete, personal" pillars. Camera-based
+  food scanning uses Gemini 2.5 Flash; coaching plans are AI-generated
+  daily, tuned to your actual logged data.
+
+  Household-scope: this build is distributed via the household F-Droid
+  repo, signed by the household release keystore. No Google Play, no
+  third-party update channel.
+
+AntiFeatures:
+  - NonFreeNet
+  - NonFreeDep
+
+AutoUpdateMode: None
+UpdateCheckMode: Static

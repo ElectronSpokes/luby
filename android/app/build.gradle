@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def releaseStoreFile = project.findProperty('storeFile') ?: System.getenv('LUBY_KEYSTORE_PATH')
+def hasReleaseKeystore = releaseStoreFile && file(releaseStoreFile).exists()
+
 android {
     namespace "net.myluby.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +10,8 @@ android {
         applicationId "net.myluby.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode = (project.findProperty('versionCode') ?: System.getenv('LUBY_VERSION_CODE') ?: '1') as Integer
+        versionName = project.findProperty('versionName') ?: System.getenv('LUBY_VERSION_NAME') ?: '1.0'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +19,22 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // CI provides storeFile + storePassword via -P props (BU-3 workflow) or env vars (local).
+            // Falls back to debug signing in buildTypes.release if no keystore present (debug builds keep working).
+            if (hasReleaseKeystore) {
+                storeFile = file(releaseStoreFile)
+                storePassword = project.findProperty('storePassword') ?: System.getenv('LUBY_KEYSTORE_PASSWORD')
+                keyAlias = project.findProperty('keyAlias') ?: System.getenv('LUBY_KEY_ALIAS') ?: 'luby-release'
+                // PKCS12 forces storePassword == keyPassword; spec FR-12 keeps separate names for forward-compat with JKS rotation.
+                keyPassword = project.findProperty('keyPassword') ?: System.getenv('LUBY_KEY_PASSWORD') ?: project.findProperty('storePassword') ?: System.getenv('LUBY_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

@@ -1,0 +1,27 @@
+Luby is a simple, AI-coached wellness companion. One app for food logging (with camera-based scanning), hydration, movement, fasting sessions, meal plans, recipes, and conversational coaching.
+
+**Pillars**
+
+* Simple — log anything in seconds, not minutes
+* Smart — AI that understands your day and gives specific coaching, not generic tips
+* Complete — food, hydration, movement, fasting, meal planning, recipes in one app
+* Personal — built for daily use; your data, your patterns
+
+**What's inside**
+
+* Camera-based food scanning (Gemini 2.5 Flash vision)
+* Macro breakdowns (calories, protein, carbs, fat, fiber, sugar)
+* Hydration & movement quick-log
+* Fasting timer with target durations
+* Daily AI coaching plans tuned to your logged data
+* 7-day AI meal plans with shopping lists
+* Recipe search + save
+* Conversational chat with the Luby coaching persona
+
+**Distribution & privacy**
+
+This build is distributed via the household F-Droid repo (signed by the household release keystore). No Google Play, no third-party update channel, no telemetry beyond what the API needs to function.
+
+**Source**
+
+http://git.theflux.life:3000/halinova/luby
