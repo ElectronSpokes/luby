@@ -10,17 +10,16 @@ The health tracking platform is live at myluby.net.
 
 ## Current Focus
 
-**P0 F-Droid Distribution** shape landed 2026-05-25 — new unblocked track ahead of P1 (which remains blocked on external credential acquisition). Spec at `/opt/halinova/spec/luby/fdroid-distribution/`.
+**P0 F-Droid Distribution shipped 2026-05-26** — Luby installable + updatable via household F-Droid at `https://fdroid.myluby.net/repo`, release-signed APK pipeline live on `v*` tags. Spec at `/opt/halinova/spec/luby/fdroid-distribution/`.
 
 **Most pickup-ready next moves**, in order of friction-cost:
 
-1. **P0 F-Droid Distribution** — `/write-spec luby/fdroid-distribution` to detailed spec, then `/create-tasks` and `/implement`. Reuses dogfood's lived F-Droid pipeline (IN-6 precedent at `fdroid.dogfood.band`). No external blockers.
-2. **Maintenance items** (Maintenance & Watch section below) — small, no external dependencies, can be batched into one PR.
-3. **P5 expansion** of historical charts beyond the food-only `BarChart` already shipped — purely additive, no new infrastructure.
-4. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase) — blocks the rest of P1; need 48k to start these processes externally.
-5. **P4 voice client** — `GET /ai/live-token` server scaffold exists; client-side voice UI is greenfield.
+1. **Maintenance items** (Maintenance & Watch section below) — small, no external dependencies, can be batched into one PR.
+2. **P5 expansion** of historical charts beyond the food-only `BarChart` already shipped — purely additive, no new infrastructure.
+3. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase) — blocks the rest of P1; need 48k to start these processes externally.
+4. **P4 voice client** — `GET /ai/live-token` server scaffold exists; client-side voice UI is greenfield.
 
-P1 cannot meaningfully advance until the external credentials are in hand; P2/P3 are larger scoped greenfield work. P0 is decoupled from all external dependencies and ready to write-spec.
+P1 cannot meaningfully advance until the external credentials are in hand; P2/P3 are larger scoped greenfield work.
 
 ## What Was Built
 
@@ -44,23 +43,23 @@ Basic recharts `BarChart` of the last 7 food entries shipped in `App.tsx:536`. F
 
 ## What's Next
 
-### Priority 0: F-Droid Distribution
+### Priority 0: F-Droid Distribution — completed 2026-05-26
 
-*Shape landed 2026-05-25 — spec at `/opt/halinova/spec/luby/fdroid-distribution/`. Reuses dogfood's lived F-Droid pipeline pattern (IN-6 precedent). No external blockers.*
+*Spec at `/opt/halinova/spec/luby/fdroid-distribution/` — 5 waves landed in S2+S3+S4. Reused dogfood's lived F-Droid pipeline pattern (IN-6 precedent).*
 
-- [ ] Vault writer policy + new paths (`secret/data/luby/release-keystore`, `secret/data/luby/fdroid-repo-key`)
-- [ ] Cloudflare DNS + Tunnel route for `fdroid.myluby.net` → existing CF Tunnel → infra-gateway 10.0.100.4
-- [ ] Caddyfile vhost on infra-gateway serving `/srv/fdroid/luby-repo/`
-- [ ] Release keystore generation + Vault storage + offsite GPG-encrypted backup to 48k's key
-- [ ] Solo recovery verification ceremony (separate-machine decrypt + sign throwaway APK)
-- [ ] F-Droid repo init + index signing key generation
-- [ ] `android/app/build.gradle` release signing configuration
-- [ ] F-Droid metadata YAML (`metadata/net.myluby.app.yml`)
-- [ ] Forgejo Actions workflow `.forgejo/workflows/release-apk.yaml` triggered on `v*` tags
-- [ ] First publication: tag `v0.1.0` → CI run → APK at `fdroid.myluby.net/repo`
-- [ ] First-install verification on 48k's device (uninstall debug APK → add repo → install Luby)
-- [ ] Update-flow verification: tag `v0.1.1` → F-Droid client surfaces update → in-place install
-- [ ] Remove `/download/app.apk` route from `api/src/index.ts` (closes DD-12 watch-for)
+- [x] Vault writer policy + new paths (`secret/data/luby/release-keystore`, `secret/data/luby/fdroid-repo-key`)
+- [x] Cloudflare DNS + Tunnel route for `fdroid.myluby.net` → existing CF Tunnel → infra-gateway 10.0.100.4
+- [x] Caddyfile vhost on infra-gateway serving `/srv/fdroid-luby/repo/`
+- [x] Release keystore generation + Vault storage + offsite GPG-encrypted backup to 48k's key
+- [x] Solo recovery verification ceremony (separate-machine decrypt + sign throwaway APK)
+- [x] F-Droid repo init + index signing key generation
+- [x] `android/app/build.gradle` release signing configuration
+- [x] F-Droid metadata YAML (`metadata/net.myluby.app.yml`)
+- [x] Forgejo Actions workflow `.forgejo/workflows/release-apk.yaml` triggered on `v*` tags
+- [x] First publication: tag `v0.1.0` → CI run → APK at `fdroid.myluby.net/repo`
+- [x] First-install verification on 48k's device (uninstall debug APK → add repo → install Luby)
+- [x] Update-flow verification: tag `v0.1.1` → F-Droid client surfaces update → in-place install
+- [x] Remove `/download/app.apk` route from `api/src/index.ts` (closes DD-12 watch-for)
 
 ### Priority 1: App Store Submission
 
@@ -130,7 +129,7 @@ Small items with no priority slot. Batchable; pick up alongside any active work.
 | Recipes | Live | AI recipe search and save |
 | Chat | Live | Conversational AI with health context |
 | Charts | Live (partial) | Food-entries `BarChart` shipped; hydration/movement/fasting + weekly/monthly pending |
-| Mobile App | Live (Android debug); iOS scaffold present | Capacitor shell, native camera, haptics. Android debug APK on device; iOS not yet built; production-signed APK pending |
+| Mobile App | Live (Android via household F-Droid, release-signed); iOS scaffold present | Capacitor shell, native camera, haptics. Release-signed APK distributed via `https://fdroid.myluby.net/repo`; iOS not yet built |
 
 ## Sources
 
