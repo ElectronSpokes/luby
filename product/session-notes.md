@@ -7,6 +7,54 @@
 
 <!-- newest first -->
 
+### 2026-05-26 — P0 F-Droid Distribution: shape + spec + tasks + verifier-pass landed end-to-end (5 commits across halinova + luby)
+
+**Active task:** N/A — session closed cleanly at `/park`. P0 spec fully landed; ready for `/implement luby/fdroid-distribution` Wave 1.
+
+**Pending user asks:** None.
+
+**In progress:** Nothing — reached a clean handoff. P0 F-Droid Distribution moved from "no spec exists" to "verified spec ready for Wave 1 execution" in one continuous session.
+
+**Blocked:** Nothing. Wave 1 (6 parallel infrastructure tasks) is fully unblocked.
+
+**Decisions made this session (25 in spec-local decisions.md):**
+- 16 shape-time: repo placement (standalone `fdroid.myluby.net`), Forgejo Actions on `v*` tags, skip in-app version-check endpoint, retire `/download/app.apk`, skip install instructions page, solo keystore ceremony (no Hudson), P0 wave placement, Vault paths, GPG-reuse, Caddy-on-infra-gateway, CF Tunnel reuse, bundle id net.myluby.app, versionCode-from-tag deferral, spec-location new convention, no Matrix ping, household-only repo (not f-droid.org public)
+- 6 spec-time: versionCode = commit count, AntiFeatures = NonFreeNet+NonFreeDep, Bones VM as recovery machine, new Luby-scoped CI SSH key, F-Droid key rotation on compromise only, USB offsite for v1
+- 3 verifier-time additions: D-FDROID-UPDATE-ON-GATEWAY (SSH-trigger `fdroid update` on infra-gateway, not in CI container), D-CADDY-NO-BASICAUTH (explicitly drop dogfood's basicauth block on Luby vhost), D-WORKSPACE-PARALLEL-DIR (Luby workspace at `/srv/fdroid-luby/`, parallel to dogfood's `/srv/fdroid/`)
+- 2 in-place revisions post-verifier: D-VERSIONCODE-COMMIT-COUNT rationale corrected (dogfood uses `MAJOR*10000+MINOR*100+PATCH`, no minor-cap; commit-count is deliberate divergence not correction); D-VAULT-PATHS-NEW simplified from two Vault paths to one (F-Droid index key gateway-resident only)
+
+**Relevant files:**
+- `/opt/halinova/spec/luby/fdroid-distribution/shape.md` (NEW, 131L)
+- `/opt/halinova/spec/luby/fdroid-distribution/spec.md` (NEW, 21 FR + 9 NFR + 5 US; revised post-verifier; Hub `1cdeb924-26df-46a5-b339-97b1dbe5a434` updated with new hash `be5a2eb...`)
+- `/opt/halinova/spec/luby/fdroid-distribution/tasks.md` (NEW, 22 tasks across 5 waves; revised post-verifier)
+- `/opt/halinova/spec/luby/fdroid-distribution/decisions.md` (NEW, 25 entries with verifier-pass revisions)
+- `/opt/halinova/spec/luby/fdroid-distribution/tech-debt.md` (NEW, 2 rows post-verifier: TD-VERSIONCODE-COLLISION-RECOVERY + TD-GATEWAY-INDEX-KEY-NO-OFFSITE)
+- `/opt/halinova/spec/luby/fdroid-distribution/status.md` (NEW)
+- `ssh johnthomson@10.0.110.27:/opt/luby/product/roadmap.md` (MODIFIED — P0 track added ahead of P1)
+
+**Cross-project references:**
+- HALINOVA — P0 spec set lives at `/opt/halinova/spec/luby/fdroid-distribution/` (4 commits: `45ca5ec` shape, `04e12ce` spec, `f9aeadf` tasks, `df32209` verifier-pass revisions). Luby-side change is roadmap.md only. See `/opt/halinova/product/session-notes.md` for HALINOVA's own log. Spec-shaping work, no execution touched HALINOVA infra or services.
+- dogfood — used as canonical reference for F-Droid pipeline pattern. Verifier source-verified live dogfood workflow YAML (via Forgejo API) + Caddyfile + `/srv/fdroid/` workspace (via SSH to infra-gateway). Findings F1, F2, F4, F5 all rooted in dogfood comparison. Luby's spec now explicitly notes the deliberate divergences (commit-count versionCode, no basicauth) vs the deliberate alignments (gateway-SSH fdroid update, gateway-resident index key, parallel-workspace dir).
+- infra-gateway (10.0.100.4) — P0 will add `/srv/fdroid-luby/` workspace + `fdroid.myluby.net` Caddy vhost + CF Tunnel route. No work touched it this session; first touches happen in Wave 1 (IN-3, IN-4) of `/implement`.
+
+**Uncommitted:** Clean. All 5 commits pushed to origin (halinova `45ca5ec`/`04e12ce`/`f9aeadf`/`df32209` on `admin_jt/HALINOVA`; luby `f9d856f` on `halinova/luby`). Both repos in sync with origin (0 ahead, 0 behind).
+
+**Commits in this session:**
+- halinova `45ca5ec` shape(luby/fdroid-distribution): P0 F-Droid Distribution — shape + decisions + tech-debt
+- halinova `04e12ce` spec(luby/fdroid-distribution): detailed spec — 21 FR + 9 NFR + 5 US
+- halinova `f9aeadf` tasks(luby/fdroid-distribution): 22 tasks across 5 waves
+- halinova `df32209` verify(luby/fdroid-distribution): apply spec-verifier findings — align with dogfood lived pattern
+- luby `f9d856f` docs(roadmap): add P0 F-Droid Distribution ahead of P1
+
+**Next steps:**
+1. **`/implement luby/fdroid-distribution` Wave 1** — 6 parallel infrastructure tasks (IN-1..IN-6): Vault writer policy, CF DNS+Tunnel, Caddy vhost (NO basicauth), `/srv/fdroid-luby/` workspace dir, fdroidserver+Caddy sanity check, CI scp SSH key. All S complexity, no external blockers. Natural starting point.
+2. **Wave 2 (keystore ceremony) prep** — before firing Wave 2, schedule: KS-5 pre-check requires Bones (10.0.110.23) to have 48k's GPG private key. Run `ssh johnthomson@10.0.110.23 'gpg --list-secret-keys'` first; if absent, import via `gpg --export-secret-keys <id> | ssh johnthomson@10.0.110.23 'gpg --import'`. This is the catastrophic-loss-class gate before v0.1.0 publication.
+3. **Process refinement (banked, not a task)** — chained `/shape-spec → /write-spec → /create-tasks` in one session this time elided per-stage verifier passes; retroactive verifier-pass caught 7 actionable findings (3 HIGH + 4 MEDIUM). Existing memory `feedback_spec_verifier_before_commit.md` already names the discipline (N=6 evidence base now including today). Next chained-skill session: run verifier BETWEEN each stage, not at the end. Pattern reusable across portfolio.
+4. **Wave 3 BU-3 (Forgejo workflow) — expect iteration** — per dogfood lived experience (CI-1 + FE-20 recovery arcs surfaced 2-3 fix-and-retag cycles for the equivalent task). Capture broken-tag-no-APK trail per dogfood precedent.
+
+**Watch for:** Nothing — no Luby services changed, no API code touched, repo idle phase continues (last code commit on luby still 2026-04-16; last service restart still 2026-05-04). The 1 roadmap doc commit + 4 halinova-side spec commits don't trigger any deploy. P0 work begins only when `/implement` fires.
+
+---
 ### 2026-05-25 — First /springboard luby + full doc-standard closeout (4 commits, /park entry)
 
 **Active task:** N/A — session closed cleanly at "What's next?" prompt after 4 commits + worktree cleanup. All planned work complete.
