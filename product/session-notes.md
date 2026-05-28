@@ -7,6 +7,68 @@
 
 <!-- newest first -->
 
+### 2026-05-28 — Diagnosed GrapheneOS Sign-In block; shaped + spec'd + tasked Authentik PKCE mobile wave (P0)
+
+**Active task:** N/A — session closed cleanly at `/park`. Spec + tasks complete; `/implement luby/authentik-pkce-mobile` Wave 1 is the next pickup.
+
+**Pending user asks:** None.
+
+**In progress:** Nothing. Shape + Spec + Tasks all landed and committed across both repos.
+
+**Blocked:** Nothing technical. Authentik admin access needed at IN-1 implementation time (extend OIDC client + enable PKCE). All other Wave 1 tasks runnable now.
+
+**Decisions:**
+- **DD-17 captured then reconciled** in `/opt/luby/product/decisions.md` — first commit (0488690) framed as "parallel option to Google Sign-In"; second commit (c09acf7) reconciled to "replace Google Sign-In" per shape D-REPLACE-NOT-PARALLEL. DD-1, DD-13, DD-14 superseded by DD-17 on spec ship.
+- **Wave promotion**: M&W row "Authentik PKCE mobile sign-in path" removed; promoted to new Priority 0 in `/opt/luby/product/roadmap.md` (ahead of P1 App Store which is externally blocked).
+- **11 spec-local decisions** in halinova spec dir — D-REPLACE-NOT-PARALLEL, D-EXTEND-EXISTING-OIDC-CLIENT, D-PORT-DOGFOOD-PKCE-LIB, D-MOBILE-CALLBACK-DISTINCT-PATH, D-REUSE-EXISTING-JWT-SHAPE, D-IN-SCOPE-GOOGLE-REMOVAL, D-WAVE-PROMOTE-P0, D-IOS-OUT-OF-SCOPE-V1, D-NO-MIGRATION-NEEDED, D-CONFIDENTIAL-CLIENT-PLUS-PKCE, D-NFR7-PARITY-CLAIMED.
+- **Verifier discipline at every gate**: shape pass surfaced 7 findings (2 HIGH, 2 MEDIUM, 3 LOW); spec pass 12 (4 HIGH, 5 MEDIUM, 3 LOW); tasks pass 14 (1 HIGH, 3 MEDIUM, 3 LOW + 7 spot-checked-clean). All actionable findings source-verified per `feedback_subagent_verifier_source_verify` (grep against cited file:line, ~30s each) and applied before commit. Single-session evidence base for the per-gate verifier discipline.
+
+**Relevant files:**
+- `ssh johnthomson@10.0.110.27:/opt/luby/product/decisions.md` (DD-17 capture + reconciliation; DD-1 status updated)
+- `ssh johnthomson@10.0.110.27:/opt/luby/product/roadmap.md` (M&W → P0 promotion + Current Focus update)
+- `/opt/halinova-wt/c6884ef1/spec/luby/authentik-pkce-mobile/{shape,decisions,spec,tasks,status,tech-debt}.md` (full spec set)
+- Source-verified reads: `/opt/luby/api/src/{routes/auth.ts,middleware/auth.ts,services/vault.ts,config.ts,index.ts}`, `/opt/luby/src/lib/{useAuth.ts,platform.ts}`, `/opt/luby/android/app/src/main/AndroidManifest.xml`, `/opt/luby/package.json`
+- Cross-ref reads: `/opt/dogfood/api/src/routes/auth.ts` (L165-220 PKCE handler), `/opt/dogfood/{lib/native/{deep-link,pkce,platform}.ts,hooks/useDeepLinkAuth.ts,tests/{hooks,lib/native,integration}/}`, `/opt/halinova/spec/dogfood/native-android/{spec,decisions,status,tasks}.md` (NFR-5, NFR-7, FE-15..FE-19 fold-back arc)
+- `ssh johnthomson@10.0.110.27:/tmp/apk-fp/release.apk` (extracted v0.1.1 F-Droid APK + apksigner verify diagnostic: SHA-1 `6400c7fe9c6137048b89a1760908980630aaded3` confirmed against new release client)
+- Hub doc registered: `adf09ef7-5207-4c3d-8ac6-f43df0fb9f2f` (spec.md)
+
+**Cross-project references:**
+- **halinova** — spec set at `/opt/halinova/spec/luby/authentik-pkce-mobile/` advanced via 3 commits on `feat/luby-authentik-pkce-shape` branch (worktree `/opt/halinova-wt/c6884ef1`): `5e72d36` shape + `4bfc909` spec + `ef23b84` tasks. All pushed to origin; awaiting FF-merge to halinova/main whenever convenient. Worktree retained (default; pass `--close` to /park at end of cycle). Mid-session worktree salvage: prior orphan `/opt/halinova-wt/99a04502` (from S4 retained worktree) was reaped from canonical's worktree registry during the 2-day session gap with files still on disk; spawned fresh `c6884ef1` and moved files in via `git -C /opt/halinova worktree add` + `mv`. See `/opt/halinova/product/session-notes.md` for any halinova-side park entry on this.
+- **dogfood** — used as canonical reference throughout: PKCE library (`lib/native/{deep-link,pkce,platform}.ts`), hook composition (`hooks/useDeepLinkAuth.ts`), custom-scheme callback shape, server-side confidential-client + PKCE token-exchange (`api/src/routes/auth.ts:L165`), D-SINGLE-AUTHENTIK-CLIENT precedent, FE-15..FE-19 fold-back hardening, NFR-5 + NFR-7 acceptance pattern. **Finding worth dogfood's side**: web `/auth/callback` GET at `/opt/luby/api/src/routes/auth.ts:L84` uses `upsertUser()` while `/auth/google-signin` POST at L144-159 uses `lookupUserByEmail()` + manual SQL — divergent user-creation patterns in the same file with no documented reason. Captured in luby tasks.md BE-2 as "do NOT follow google-signin handler's pattern" warning. If dogfood has a similar dual-pattern surface in its own routes, worth a sweep next dogfood session.
+
+**Uncommitted:** Clean across both luby/main and halinova worktree at session-note write time (session-note commit + push lands as the final step of /park).
+
+**Commits in this session:**
+
+luby/main (2 commits, all pushed to origin/main):
+- `0488690` docs(decisions/roadmap): DD-17 GrapheneOS Sign-In blocker + M&W row for Authentik PKCE follow-on
+- `c09acf7` docs(decisions/roadmap): reconcile DD-17 to single-Authentik path + promote PKCE wave to P0
+
+halinova/feat/luby-authentik-pkce-shape (3 commits, all pushed to origin):
+- `5e72d36` shape(luby/authentik-pkce-mobile): replace mobile Google Sign-In with Authentik OIDC PKCE
+- `4bfc909` spec(luby/authentik-pkce-mobile): full spec.md + status — 25 FRs, 9 NFRs, 6 US, 12 ACs
+- `ef23b84` tasks(luby/authentik-pkce-mobile): 29-task breakdown across 6 waves
+
+**Simplify gate (Step 2.5):** All 4 session-window commits are doc-only — `product/decisions.md`, `product/roadmap.md`, and `spec/luby/authentik-pkce-mobile/*.md` paths all match the `product/**`, `spec/**`, and `**/*.md` allowlists. Silent skip; no TD-PARK-SIMPLIFY row added. Cross-tree lens on canonical halinova (`6014475`) is another session's work (duilleag rigging-failure investigation) — out of luby session scope.
+
+**Next steps:**
+1. **`/implement luby/authentik-pkce-mobile` Wave 1** — 7 parallel tasks (IN-1 Authentik admin + BE-1 helper extract + FE-1 vitest setup + FE-2/FE-3/FE-4 library port + AN-1 manifest). All S complexity; only external dependency is Authentik admin access for IN-1. Natural starting point; could land as a single bundled commit. Real-time risk gate: IN-1's web sign-in smoke-test (OQ-1).
+2. **FF-merge halinova `feat/luby-authentik-pkce-shape` → main** when convenient. Branch is 3 commits ahead of main; concurrent halinova session `01KSPCQ1` is on canonical writing `spec/halinova/external-call-resilience/` so no conflict on `spec/luby/`. Can FF without coordination.
+3. **Physical USB delivery (KS-4 tail, carry-forward from S4)** — pull `halinova:~/keystore-backups/luby-release-2026-05-26.gpg` → Windows laptop → USB → mum's offsite per dogfood AC-7 precedent. Still pending; not blocking PKCE wave but should land before any next F-Droid catastrophic-loss scenario.
+4. **Worktree close** — `/opt/halinova-wt/c6884ef1` retained per default; pass `--close` to /park at end of cycle (per worktree-day walkthrough) OR let GC sweeper reap.
+5. **DD-1/13/14/17 final close** happens at spec-ship time (post-`/implement` + post-RE-5 v0.2.0 tag).
+
+**Watch for:**
+- **OQ-1 (Authentik "Code Challenge Required" toggle semantics)** — IN-1's smoke-test of web sign-in at `myluby.net` after the admin change is the real-time risk gate. If web breaks (because the toggle is enforced globally on the client rather than per-redirect-URI), branch into IN-1a adding PKCE to web `/auth/login` route too. Per dogfood's `authentik-rotation.md` the toggle is unlikely to break web, but verify.
+- **FE-5 adapter rewrite complexity** — tagged L (Large) in tasks.md; expect ~4-8 hours. If escalates further, split into FE-5a (interface rewrites) + FE-5b (success branch + Preferences) per Risks table.
+- **Cross-server file transfer pattern** — FE-2/FE-3/FE-4 + TE-1..TE-4 source files live on dogfood VM (10.0.100.2), not luby VM. Tasks.md "Notes for the implementer" has scp recipes (two-hop via halinova OR scp-to-/tmp-then-scp-onward).
+- **Concurrent halinova canonical session 01KSPCQ1** — actively writing `/opt/halinova/spec/halinova/external-call-resilience/` per latest canonical commit `6014475`. Different spec dir; no FF-merge conflict expected for luby spec branch.
+- **F-Droid v0.2.0 first-install on 48k's Pixel** — the AC-9 acceptance gate. Per dogfood FE-15..FE-19 lived experience, expect 1-3 fix-and-retag cycles on first fire. Don't be surprised; capture broken-tag trail per dogfood precedent.
+
+---
+
+
+
 ### 2026-05-26 — P0 F-Droid Distribution Wave 4 + Wave 5 closed end-to-end; v1 SHIPPED on real device
 
 **Active task:** N/A — session closed cleanly at `/park`. All 22 tasks landed. Outstanding tail (physical USB delivery of offsite GPG blob) is deferred but does not gate anything.
