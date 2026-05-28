@@ -116,6 +116,7 @@ Small items with no priority slot. Batchable; pick up alongside any active work.
 | `App.tsx` refactor threshold | DD-8 watch-for | Currently 1082 lines (~54% of 2000-line threshold). No action yet; revisit if it crosses ~1500. |
 | Vault-vs-`.env` source-of-truth audit | DD-6 + systemd config | `luby-api.service` EnvironmentFile is `/opt/luby/api/.env`; verify Vault AppRole is primary path and `.env` only holds bootstrap creds, not the real secrets. |
 | Root `README.md` is generic template | observed S4 | Root `/opt/luby/README.md` is the generic `northernlights` Claude Code project-setup template (refs `hudson/northernlights` repo, `.claude/` layout), not Luby-specific. Surfaced when RE-4 needed a trivial commit and CHANGELOG.md was seeded instead. Rewrite when next touched — one short Luby-specific intro + pointer to `product/` doc set. |
+| Authentik PKCE mobile sign-in path (DD-17 follow-on) | DD-17 / user-blocker | Google Sign-In via Credential Manager incompatible with GrapheneOS — primary user blocked on F-Droid Android app. Needs parallel mobile sign-in via Authentik OIDC PKCE custom-scheme (`net.myluby.app://callback`, mirror dogfood pattern). Stopgap option: in-app button opens `https://myluby.net` in system browser. Proper fix: spec a new wave (Authentik client redirect URI + PKCE + server callback endpoint + native plugin wiring). Candidate for promotion to roadmap priority — currently parked here because shape isn't drawn yet. |
 
 ## Product Lines
 
