@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { setCookie, getCookie } from 'hono/cookie';
 import * as jose from 'jose';
 import { authMiddleware, getJwks, upsertUser, lookupUserByEmail } from '../middleware/auth';
+import { exchangeCodeForTokens, TokenExchangeError } from '../services/authentik';
 import { getConfig } from '../config';
 import { sql } from '../db/client';
 import type { AppEnv } from '../types';
@@ -54,50 +55,36 @@ authRoutes.get('/callback', async (c) => {
   if (state !== storedState) return c.json({ error: 'Invalid state' }, 400);
 
   try {
-    const tokenResponse = await fetch('https://auth.theflux.life/application/o/token/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        code,
-        redirect_uri: `${config.apiBaseUrl}/api/v1/auth/callback`,
-      }),
-    });
+    const result = await exchangeCodeForTokens(
+      code,
+      `${config.apiBaseUrl}/api/v1/auth/callback`,
+    );
 
-    if (!tokenResponse.ok) {
-      const error = await tokenResponse.text();
-      console.error('Token exchange failed:', error);
-      return c.json({ error: 'Token exchange failed' }, 400);
+    if (!storedNonce || result.claims.nonce !== storedNonce) {
+      return c.json({ error: 'Invalid nonce' }, 400);
     }
-
-    const tokens = await tokenResponse.json() as { access_token: string; id_token: string; expires_in: number };
-    const jwks = await getJwks();
-    const { payload } = await jose.jwtVerify(tokens.id_token, jwks, {
-      issuer: config.issuer,
-      audience: config.clientId,
-    });
-
-    if (!storedNonce || payload.nonce !== storedNonce) return c.json({ error: 'Invalid nonce' }, 400);
 
     await upsertUser({
       type: 'human',
-      sub: payload.sub,
-      email: payload.email as string | undefined,
-      name: payload.name as string | undefined,
-      preferred_username: payload.preferred_username as string | undefined,
+      sub: result.claims.sub,
+      email: result.claims.email as string | undefined,
+      name: result.claims.name as string | undefined,
+      preferred_username: result.claims.preferred_username as string | undefined,
     });
 
-    setCookie(c, 'luby_session', tokens.access_token, {
+    setCookie(c, 'luby_session', result.accessToken, {
       httpOnly: true, secure: true, sameSite: 'None',
-      domain: '.myluby.net', maxAge: tokens.expires_in, path: '/',
+      domain: '.myluby.net', maxAge: result.expiresIn, path: '/',
     });
     setCookie(c, 'oauth_state', '', { maxAge: 0, path: '/' });
     setCookie(c, 'oauth_nonce', '', { maxAge: 0, path: '/' });
 
     return c.redirect(config.frontendUrl);
   } catch (error) {
+    if (error instanceof TokenExchangeError) {
+      console.error('Token exchange failed:', error.upstreamBody);
+      return c.json({ error: 'Token exchange failed' }, 400);
+    }
     console.error('OAuth callback error:', error);
     return c.json({ error: 'Authentication failed' }, 500);
   }
