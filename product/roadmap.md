@@ -10,14 +10,17 @@ The health tracking platform is live at myluby.net.
 
 ## Current Focus
 
+**P0 Authentik PKCE mobile sign-in is active** (shaped 2026-05-28; spec at `/opt/halinova/spec/luby/authentik-pkce-mobile/`). Closes DD-17 GrapheneOS Sign-In blocker by replacing Google Sign-In on mobile with Authentik OIDC PKCE custom-scheme; mirrors dogfood's proven 2026-05 Luggage pattern.
+
 **P0 F-Droid Distribution shipped 2026-05-26** — Luby installable + updatable via household F-Droid at `https://fdroid.myluby.net/repo`, release-signed APK pipeline live on `v*` tags. Spec at `/opt/halinova/spec/luby/fdroid-distribution/`.
 
 **Most pickup-ready next moves**, in order of friction-cost:
 
-1. **Maintenance items** (Maintenance & Watch section below) — small, no external dependencies, can be batched into one PR.
-2. **P5 expansion** of historical charts beyond the food-only `BarChart` already shipped — purely additive, no new infrastructure.
-3. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase) — blocks the rest of P1; need 48k to start these processes externally.
-4. **P4 voice client** — `GET /ai/live-token` server scaffold exists; client-side voice UI is greenfield.
+1. **P0 Authentik PKCE implementation** — spec ready; `/write-spec` → `/create-tasks` → `/implement` sequence. Unblocks primary user (GrapheneOS) on F-Droid Android app.
+2. **Maintenance items** (Maintenance & Watch section below) — small, no external dependencies, can be batched into one PR.
+3. **P5 expansion** of historical charts beyond the food-only `BarChart` already shipped — purely additive, no new infrastructure.
+4. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase) — blocks the rest of P1; need 48k to start these processes externally.
+5. **P4 voice client** — `GET /ai/live-token` server scaffold exists; client-side voice UI is greenfield.
 
 P1 cannot meaningfully advance until the external credentials are in hand; P2/P3 are larger scoped greenfield work.
 
@@ -42,6 +45,21 @@ Vault AppRole integration (secrets at `secret/data/luby/api`). Cloudflare Pages 
 Basic recharts `BarChart` of the last 7 food entries shipped in `App.tsx:536`. First step toward P5 (Data and Insights).
 
 ## What's Next
+
+### Priority 0: Authentik PKCE mobile sign-in — current
+
+*Spec at `/opt/halinova/spec/luby/authentik-pkce-mobile/` — shaped 2026-05-28; closes DD-17 (GrapheneOS Sign-In blocker) by replacing Google Sign-In on mobile with Authentik OIDC PKCE custom-scheme. Mirrors dogfood's 2026-05 Luggage pattern (D-SINGLE-AUTHENTIK-CLIENT, FR-19). Android-only at v1; iOS deferred to P1.*
+
+- [ ] Authentik admin: extend Luby OIDC client with `net.myluby.app://callback` redirect URI + enable PKCE
+- [ ] Port dogfood PKCE library (`/opt/dogfood/lib/native/{deep-link,pkce,platform}.ts` + `/opt/dogfood/hooks/useDeepLinkAuth.ts`) into Luby `src/lib/native/` + `src/hooks/`
+- [ ] AndroidManifest intent-filter for `net.myluby.app://callback`
+- [ ] Server `POST /api/v1/auth/mobile-callback` endpoint (Authentik token exchange + JWKS verify + `lookupUserByEmail` + Luby HS256 JWT issue)
+- [ ] Replace mobile sign-in UI in `src/lib/useAuth.ts`: drop SocialLogin block, add Authentik PKCE flow
+- [ ] Remove Google Sign-In end-to-end: `@capgo/capacitor-social-login` package, `POST /auth/google-signin` route, `GOOGLE_CLIENT_ID` in Vault + env, Google Cloud OAuth Android (debug + release) + Web clients in project `gen-lang-client-0511482895`
+- [ ] DD status updates in `product/decisions.md`: DD-1 → closed, DD-13 → closed, DD-14 → closed, DD-17 → closed
+- [ ] NFR-7 parity verification (`gradlew :app:dependencies | grep com.google.gms` returns empty — mirrors dogfood spec NFR-7)
+- [ ] Test coverage: port at least dogfood's `tests/hooks/use-deep-link-auth.test.ts` (7 vitest branches); full 43-test corpus stretch
+- [ ] F-Droid release: cut `v0.2.0` tag (material API-level auth change); first-install verification on 48k's GrapheneOS Pixel; in-place update preserves session
 
 ### Priority 0: F-Droid Distribution — completed 2026-05-26
 
@@ -116,7 +134,6 @@ Small items with no priority slot. Batchable; pick up alongside any active work.
 | `App.tsx` refactor threshold | DD-8 watch-for | Currently 1082 lines (~54% of 2000-line threshold). No action yet; revisit if it crosses ~1500. |
 | Vault-vs-`.env` source-of-truth audit | DD-6 + systemd config | `luby-api.service` EnvironmentFile is `/opt/luby/api/.env`; verify Vault AppRole is primary path and `.env` only holds bootstrap creds, not the real secrets. |
 | Root `README.md` is generic template | observed S4 | Root `/opt/luby/README.md` is the generic `northernlights` Claude Code project-setup template (refs `hudson/northernlights` repo, `.claude/` layout), not Luby-specific. Surfaced when RE-4 needed a trivial commit and CHANGELOG.md was seeded instead. Rewrite when next touched — one short Luby-specific intro + pointer to `product/` doc set. |
-| Authentik PKCE mobile sign-in path (DD-17 follow-on) | DD-17 / user-blocker | Google Sign-In via Credential Manager incompatible with GrapheneOS — primary user blocked on F-Droid Android app. Needs parallel mobile sign-in via Authentik OIDC PKCE custom-scheme (`net.myluby.app://callback`, mirror dogfood pattern). Stopgap option: in-app button opens `https://myluby.net` in system browser. Proper fix: spec a new wave (Authentik client redirect URI + PKCE + server callback endpoint + native plugin wiring). Candidate for promotion to roadmap priority — currently parked here because shape isn't drawn yet. |
 
 ## Product Lines
 
