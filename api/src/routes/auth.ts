@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
 import { setCookie, getCookie } from 'hono/cookie';
 import * as jose from 'jose';
-import { authMiddleware, getJwks, upsertUser, lookupUserByEmail } from '../middleware/auth';
+import { authMiddleware, upsertUser } from '../middleware/auth';
 import { exchangeCodeForTokens, TokenExchangeError } from '../services/authentik';
 import { getConfig } from '../config';
-import { sql } from '../db/client';
 import type { AppEnv } from '../types';
 
 export const authRoutes = new Hono<AppEnv>();
@@ -165,83 +164,6 @@ authRoutes.post('/mobile-callback', async (c) => {
     }
     console.error('Mobile callback error:', error);
     return c.json({ error: 'Internal server error' }, 500);
-  }
-});
-
-// POST /auth/google-signin - Native mobile Google Sign-In
-authRoutes.post('/google-signin', async (c) => {
-  const config = getConfig();
-
-  if (!config.googleClientId || !config.sessionSecret) {
-    return c.json({ error: 'Google Sign-In not configured' }, 500);
-  }
-
-  let body: { idToken: string };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'Invalid request body' }, 400);
-  }
-
-  if (!body.idToken) {
-    return c.json({ error: 'Missing idToken' }, 400);
-  }
-
-  try {
-    // Verify Google ID token via Google's JWKS
-    const googleJwks = jose.createRemoteJWKSet(
-      new URL('https://www.googleapis.com/oauth2/v3/certs')
-    );
-    const { payload } = await jose.jwtVerify(body.idToken, googleJwks, {
-      issuer: ['https://accounts.google.com', 'accounts.google.com'],
-      // Accept tokens for any of our client IDs (web + android)
-    });
-
-    const email = payload.email as string;
-    const name = payload.name as string | undefined;
-    const googleSub = payload.sub as string;
-
-    if (!email) {
-      return c.json({ error: 'No email in Google token' }, 400);
-    }
-
-    // Look up existing user by email (may have been created via web/Authentik login)
-    const existing = await lookupUserByEmail(email);
-
-    let userSub: string;
-
-    if (existing) {
-      // Existing user — keep their original sub, just update name
-      userSub = existing.sub;
-      await sql`UPDATE users SET name = COALESCE(${name || null}, name), updated_at = NOW() WHERE id = ${existing.id}`;
-    } else {
-      // New user — create with google-prefixed sub
-      userSub = `google:${googleSub}`;
-      await sql`
-        INSERT INTO users (sub, email, name)
-        VALUES (${userSub}, ${email}, ${name || null})
-      `;
-    }
-
-    // Sign our own JWT (30-day expiry)
-    const secret = new TextEncoder().encode(config.sessionSecret);
-    const expiresIn = 30 * 24 * 60 * 60;
-    const token = await new jose.SignJWT({
-      sub: userSub,
-      email,
-      name: name || null,
-      type: 'luby_session',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime(`${expiresIn}s`)
-      .sign(secret);
-
-    console.log(`Google Sign-In: ${email} (${existing ? 'existing' : 'new'} user)`);
-    return c.json({ token, expiresIn });
-  } catch (error) {
-    console.error('Google Sign-In error:', error);
-    return c.json({ error: 'Authentication failed' }, 401);
   }
 });
 

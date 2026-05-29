@@ -38,7 +38,7 @@ async function verifyAuthentikToken(token: string): Promise<AuthUser | null> {
   }
 }
 
-// Verify Luby-signed JWT (issued by /auth/google-signin for mobile)
+// Verify Luby-signed JWT (issued by /auth/mobile-callback for native Android via Authentik PKCE)
 async function verifyLubyToken(token: string): Promise<AuthUser | null> {
   try {
     const config = getConfig();

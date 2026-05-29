@@ -23,7 +23,6 @@ const SECRET_MAPPING: Record<string, string> = {
   authentik_client_id: 'AUTHENTIK_CLIENT_ID',
   authentik_client_secret: 'AUTHENTIK_CLIENT_SECRET',
   session_secret: 'SESSION_SECRET',
-  google_client_id: 'GOOGLE_CLIENT_ID',
 };
 
 async function authenticateWithAppRole(
