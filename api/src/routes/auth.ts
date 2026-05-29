@@ -90,6 +90,84 @@ authRoutes.get('/callback', async (c) => {
   }
 });
 
+const NATIVE_REDIRECT_URI = 'net.myluby.app://callback';
+const MOBILE_JWT_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+// POST /auth/mobile-callback - Native Android (Authentik OIDC + PKCE)
+authRoutes.post('/mobile-callback', async (c) => {
+  const config = getConfig();
+
+  if (!config.sessionSecret) {
+    return c.json({ error: 'Mobile callback not configured' }, 500);
+  }
+
+  let body: {
+    code?: string;
+    code_verifier?: string;
+    state?: string;
+    nonce?: string;
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid request body' }, 400);
+  }
+
+  if (!body.code) return c.json({ error: 'Missing code' }, 400);
+  if (!body.code_verifier || body.code_verifier.length < 43) {
+    return c.json(
+      { error: 'Missing or invalid code_verifier (RFC 7636 requires ≥43 chars)' },
+      400,
+    );
+  }
+
+  try {
+    const result = await exchangeCodeForTokens(
+      body.code,
+      NATIVE_REDIRECT_URI,
+      body.code_verifier,
+    );
+
+    if (body.nonce && result.claims.nonce !== body.nonce) {
+      return c.json({ error: 'Invalid nonce' }, 400);
+    }
+
+    await upsertUser({
+      type: 'human',
+      sub: result.claims.sub,
+      email: result.claims.email as string | undefined,
+      name: result.claims.name as string | undefined,
+      preferred_username: result.claims.preferred_username as string | undefined,
+    });
+
+    const secret = new TextEncoder().encode(config.sessionSecret);
+    const token = await new jose.SignJWT({
+      sub: result.claims.sub,
+      email: result.claims.email,
+      name: (result.claims.name as string | undefined) || null,
+      type: 'luby_session',
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime(`${MOBILE_JWT_TTL_SECONDS}s`)
+      .sign(secret);
+
+    console.log(`Mobile sign-in: ${result.claims.email}`);
+    return c.json({ token, expiresIn: MOBILE_JWT_TTL_SECONDS });
+  } catch (error) {
+    if (error instanceof TokenExchangeError) {
+      console.error('Token exchange failed:', error.upstreamBody);
+      return c.json({ error: 'Token exchange failed' }, 400);
+    }
+    if (error instanceof jose.errors.JOSEError) {
+      console.error('id_token verification failed:', error.message);
+      return c.json({ error: 'Invalid id_token' }, 400);
+    }
+    console.error('Mobile callback error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
 // POST /auth/google-signin - Native mobile Google Sign-In
 authRoutes.post('/google-signin', async (c) => {
   const config = getConfig();
