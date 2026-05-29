@@ -1,8 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Preferences } from '@capacitor/preferences';
-import { SocialLogin } from '@capgo/capacitor-social-login';
+import { Browser } from '@capacitor/browser';
 import { api } from './api';
 import { isNative } from './platform';
+import {
+  useAuthentikDeepLink,
+  AUTHORIZE_URL,
+  CLIENT_ID,
+  SCOPE,
+  NATIVE_REDIRECT_URI,
+} from '../hooks/useAuthentikDeepLink';
+import { generateChallenge, persistChallenge } from './native/pkce';
 
 interface User {
   sub: string;
@@ -10,12 +18,6 @@ interface User {
   name: string;
   preferred_username: string;
 }
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://10.0.110.27:3001';
-const GOOGLE_WEB_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
-let socialLoginInitialized = false;
-let initError: string | null = null;
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -34,69 +36,29 @@ export function useAuth() {
 
   useEffect(() => {
     checkAuth();
-
-    // Initialize Google Sign-In on native
-    if (isNative() && !socialLoginInitialized && GOOGLE_WEB_CLIENT_ID) {
-      socialLoginInitialized = true;
-      SocialLogin.initialize({
-        google: {
-          webClientId: GOOGLE_WEB_CLIENT_ID,
-        },
-      })
-        .then(() => console.log('[Luby] Google Sign-In initialized'))
-        .catch((e: unknown) => {
-          initError = String(e);
-          console.error('[Luby] Google init error:', e);
-        });
-    }
   }, [checkAuth]);
+
+  // Subscribe to native deep-link callback. On native, after Authentik
+  // redirects to net.myluby.app://callback, the hook exchanges the code
+  // for a Luby JWT (POST /auth/mobile-callback), stores it in Preferences,
+  // then invokes checkAuth() to refresh user state. No-op on web.
+  useAuthentikDeepLink(checkAuth);
 
   const login = async () => {
     if (isNative()) {
-      if (!GOOGLE_WEB_CLIENT_ID) {
-        alert('Google Client ID not configured');
-        return;
-      }
-      if (initError) {
-        alert('Google init failed: ' + initError);
-        return;
-      }
-
       try {
-        const result = await SocialLogin.login({
-          provider: 'google',
-          options: {
-            scopes: ['email', 'profile'],
-          },
-        });
-
-        const idToken = (result as any).result?.idToken;
-        if (!idToken) {
-          alert('No ID token returned from Google. Result: ' + JSON.stringify(result).substring(0, 200));
-          return;
-        }
-
-        // Exchange Google ID token for Luby JWT
-        const res = await fetch(`${API_URL}/api/v1/auth/google-signin`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken }),
-        });
-
-        if (!res.ok) {
-          const err = await res.text();
-          alert('API error: ' + err);
-          return;
-        }
-
-        const data = (await res.json()) as { token: string; expiresIn: number };
-        await Preferences.set({ key: 'auth_token', value: data.token });
-        if (data.expiresIn) {
-          const expiresAt = Date.now() + data.expiresIn * 1000;
-          await Preferences.set({ key: 'auth_expires', value: expiresAt.toString() });
-        }
-
-        await checkAuth();
+        const challenge = await generateChallenge();
+        await persistChallenge(challenge);
+        const authorizeUrl = new URL(AUTHORIZE_URL);
+        authorizeUrl.searchParams.set('response_type', 'code');
+        authorizeUrl.searchParams.set('client_id', CLIENT_ID);
+        authorizeUrl.searchParams.set('redirect_uri', NATIVE_REDIRECT_URI);
+        authorizeUrl.searchParams.set('scope', SCOPE);
+        authorizeUrl.searchParams.set('state', challenge.state);
+        authorizeUrl.searchParams.set('nonce', challenge.nonce);
+        authorizeUrl.searchParams.set('code_challenge', challenge.challenge);
+        authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+        await Browser.open({ url: authorizeUrl.toString() });
       } catch (e) {
         alert('Sign-in error: ' + String(e));
       }
@@ -107,9 +69,6 @@ export function useAuth() {
 
   const logout = async () => {
     if (isNative()) {
-      try {
-        await SocialLogin.logout({ provider: 'google' });
-      } catch {}
       await Preferences.remove({ key: 'auth_token' });
       await Preferences.remove({ key: 'auth_expires' });
       setUser(null);
