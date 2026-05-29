@@ -10,17 +10,18 @@ Luby is a cross-platform mobile app backed by a Hono API. The frontend is a Reac
 Mobile App (Capacitor)              Web App (CF Pages)
     ├── React + Tailwind               ├── React + Tailwind
     ├── Native Camera                  ├── Browser Camera
-    ├── Google Sign-In SDK             ├── Authentik OIDC
+    ├── Authentik OIDC + PKCE          ├── Authentik OIDC
+    │     (custom-scheme callback)     │
     ├── Push Notifications             ├── (no push)
     ├── Offline SQLite cache           ├── (online only)
-    └── App Store / Google Play        └── myluby.net
+    └── F-Droid (Android) / App Store  └── myluby.net
          \                              /
           \____________________________/
                       |
               https://api.myluby.net
                       |
             Hono API (Bun, port 3001)
-            ├── Dual auth (Authentik + Google)
+            ├── Authentik (web cookie + mobile JWT)
             ├── PostgreSQL (data)
             ├── Gemini 2.5 Flash (AI)
             └── systemd on 10.0.110.27
@@ -38,22 +39,25 @@ Mobile App (Capacitor)              Web App (CF Pages)
 | Database | PostgreSQL 16 | Already running, JSONB for flexible schemas |
 | AI | Google Gemini 2.5 Flash | Vision (food scanning), structured output (coaching/recipes), chat |
 | Auth (web) | Authentik OIDC | Session cookies on `.myluby.net` |
-| Auth (mobile) | Google Sign-In SDK | `@capgo/capacitor-social-login`, server issues HS256 JWT |
+| Auth (mobile) | Authentik OIDC + PKCE custom-scheme | `net.myluby.app://callback`; server exchanges code via `services/authentik.ts` helper, issues HS256 JWT (30-day, `type: 'luby_session'`); works on GrapheneOS / Android without Google Play Services per DD-17 |
 | Hosting (web) | Cloudflare Pages | Auto-deploy via Gitea → GitHub mirror |
 | Hosting (API) | Cloudflare Tunnel | Live at api.myluby.net |
 
 ## Auth Architecture
 
-Dual auth paths converging on the same users table:
+Two surfaces (web + mobile), one identity provider (Authentik), one users table:
 
-| | Web | Mobile |
+| | Web | Mobile (Android) |
 |---|---|---|
-| **Provider** | Authentik OIDC | Google Sign-In SDK |
-| **Plugin** | — | `@capgo/capacitor-social-login` |
-| **Flow** | Redirect → callback → session cookie | Native popup → ID token → `POST /auth/google-signin` → Luby JWT |
-| **Token** | Authentik access token in `luby_session` cookie | HS256 JWT (30-day, signed with `SESSION_SECRET`) |
-| **Validation** | Authentik JWKS verification | Google JWKS verification (no audience check — Android client ID differs from web; see DD-14) |
-| **User matching** | By `sub` claim | By email — `lookupUserByEmail()` (see DD-15) |
+| **Provider** | Authentik OIDC | Authentik OIDC + PKCE custom-scheme callback |
+| **Redirect URI** | `https://api.myluby.net/api/v1/auth/callback` | `net.myluby.app://callback` |
+| **Flow** | Server redirect → callback → exchange code → set session cookie | `@capacitor/browser` opens authorize URL in system browser → custom-scheme intent fires → `POST /api/v1/auth/mobile-callback` exchanges `{code, code_verifier}` → Luby HS256 JWT (30-day) |
+| **Token storage** | Authentik access token in `luby_session` cookie on `.myluby.net` | Luby HS256 JWT in Capacitor Preferences (per DD-9) |
+| **Validation** | Authentik JWKS verification | id_token verified via Authentik JWKS (audience = `clientId`); Luby HS256 JWT verified by middleware on every API call (`type: 'luby_session'` claim required) |
+| **User matching** | `upsertUser()` by Authentik `sub` | `upsertUser()` by Authentik `sub` (single helper — both flows converge per DD-17) |
+| **Token-exchange helper** | `services/authentik.ts` — `exchangeCodeForTokens(code, redirectUri)` | Same helper, called with `(code, 'net.myluby.app://callback', code_verifier)` |
+
+iOS is deferred to P1 — will use Universal Links / Associated Domains rather than custom scheme (different shape; out of v1 per DD-17 spec).
 
 **Middleware chain.** Each request runs through the auth middleware in order: Authentik JWT → Luby JWT → session cookie. The first successful validation populates the request user and short-circuits the chain; if all three fail, the request continues as anonymous and any downstream route requiring auth returns 401. No anonymous fallback for protected routes — every route that touches per-user data asserts an authenticated user explicitly.
 
@@ -65,10 +69,9 @@ Dual auth paths converging on the same users table:
 |--------|---------|---------|
 | Camera | `@capacitor/camera` | Native camera for food scanning |
 | Haptics | `@capacitor/haptics` | Tactile feedback on logging |
-| Preferences | `@capacitor/preferences` | Auth token storage |
-| Social Login | `@capgo/capacitor-social-login` | Google Sign-In (native SDK) |
-| App | `@capacitor/app` | App lifecycle |
-| Browser | `@capacitor/browser` | External links |
+| Preferences | `@capacitor/preferences` | Auth token + PKCE challenge storage (verifier/nonce/state during browser hop) |
+| App | `@capacitor/app` | App lifecycle + `appUrlOpen` listener + `getLaunchUrl` for cold-start deep-link |
+| Browser | `@capacitor/browser` | External links + Authentik authorize URL (PKCE sign-in flow) |
 
 **Build chain (production APK):**
 ```
@@ -95,8 +98,8 @@ cd android && ./gradlew assembleDebug
 | Route Group | Purpose |
 |-------------|---------|
 | `/api/v1/auth/login` | Authentik OIDC redirect (web) |
-| `/api/v1/auth/callback` | Authentik callback (web) |
-| `/api/v1/auth/google-signin` | Google ID token exchange (mobile) |
+| `/api/v1/auth/callback` | Authentik callback — cookie-based (web). Uses shared `exchangeCodeForTokens` helper |
+| `/api/v1/auth/mobile-callback` | Authentik PKCE token exchange (native Android). POST `{code, code_verifier, state?, nonce?}` → `{token, expiresIn}`. Uses shared `exchangeCodeForTokens` helper with `code_verifier` |
 | `/api/v1/auth/logout` | Clear session |
 | `/api/v1/auth/me` | Current user |
 | `/api/v1/food/*` | Food entry CRUD |
@@ -149,8 +152,7 @@ Single PostgreSQL 16 database on `10.0.110.27:5432`. Schema lives in `api/migrat
 | Service | Purpose | Credentials |
 |---------|---------|-------------|
 | Google Gemini API | AI (vision, chat, structured) | Vault `secret/data/luby/api` |
-| Google Cloud (OAuth) | Android Sign-In | Web client ID in Vault, Android client via SHA-1 fingerprint |
-| Authentik | OIDC authentication (web) | Vault `secret/data/luby/api` |
+| Authentik | OIDC authentication for both web and native Android (PKCE custom-scheme callback at `net.myluby.app://callback`) | Vault `secret/data/luby/api` |
 | Cloudflare | Pages hosting + Tunnel | Vault `secret/data/halinova/cloudflare` |
 | Apple Developer | iOS App Store | TBD |
 | Google Play Console | Android Store | TBD |
@@ -162,8 +164,6 @@ Single PostgreSQL 16 database on `10.0.110.27:5432`. Schema lives in `api/migrat
 
 | Decision | Choice | DD |
 |----------|--------|----|
-| Google Sign-In over Authentik for mobile | Native SDK (no deep-link OIDC) | DD-1 |
-| Static import for Capacitor plugins | `import { SocialLogin }` not `await import()` — dynamic imports hang in production WebView | DD-13 |
-| No JWT audience check on Google tokens | Verify signature only — Android `aud` differs from web | DD-14 |
-| Email-based user matching on Google Sign-In | `lookupUserByEmail()` to avoid duplicate accounts | DD-15 |
+| Authentik OIDC + PKCE custom-scheme for native Android mobile sign-in | Single OIDC client extended with `net.myluby.app://callback` redirect URI; replaces Google Sign-In | DD-17 |
+| Email-based user matching legacy carry-over | Pre-DD-17 web flow used `upsertUser()` by `sub`; Google flow used `lookupUserByEmail()` — both consolidated on `upsertUser()` per DD-17 implementation. DD-15's `users.email` non-UNIQUE schema caveat still applies | DD-15 |
 | Open CORS | `origin: (origin) => origin` — tightening deferred until all Capacitor origins catalogued | DD-16 |
