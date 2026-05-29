@@ -7,6 +7,92 @@
 
 <!-- newest first -->
 
+### 2026-05-29 — Authentik PKCE mobile sign-in spec — Waves 1–5 landed end-to-end (5 luby/main commits + 4 halinova status commits); Wave 6 release fire pending
+
+**Active task:** N/A — session closed cleanly at /park after user picked "/park here; come back fresh for Wave 6" from cadence question. Code side of `spec/luby/authentik-pkce-mobile` is COMPLETE; only the release fire (Wave 6 RE-1..RE-8) remains.
+
+**Pending user asks:** None.
+
+**In progress:** Nothing. Five waves of authentik-pkce-mobile fully landed (luby/main `48516e9`→`9fa5d83`; halinova feat/luby-authentik-pkce-shape `a79daf0`→`c41e8e8`). luby-api restarted twice mid-session (after BE-2 and after Wave 4); /auth/mobile-callback live (HTTP 400 on empty body), /auth/google-signin gone (HTTP 404). vitest 47/47 pass across 5 test files (TE-1 hook 7 branches + TE-2 pkce 13 + TE-3 deep-link 13 + TE-4 roundtrip 10 + BE-1 helper 4).
+
+**Blocked:** Nothing technical. **Pre-ship gate** before Wave 6 RE-5: `VITE_AUTHENTIK_CLIENT_ID` needs to land in `.env.production` (FE-5 hook fallback is `'luby-api'` dev default; Authentik will reject the wrong client_id in real PKCE flow → v0.2.0 APK would fail authorize URL with 'invalid client' on the Pixel). Real value lives in Vault `secret/data/luby/api` key `authentik_client_id` or visible in the Luby OIDC client page in Authentik admin UI.
+
+**Decisions:**
+- **IN-1 closed mid-session** — 48k did Authentik admin UI step (added `net.myluby.app://callback` second redirect URI + toggled PKCE on, kept Confidential client type). AC-11 web sign-in smoke-test at myluby.net PASS — OQ-1 did NOT fire (Authentik's "Code Challenge Required" toggle is compatible with the non-PKCE web flow on Confidential clients). No IN-1a branch needed.
+- **D-REPLACE-NOT-PARALLEL ratified** in code — single Authentik auth path for both web and mobile (Android); no parallel Google fallback maintained. Confirmed mid-session via user question "are we keeping the google and graphen build separate?" — answer: NO, single build, single auth, single OIDC client. iOS deferred to P1 (Universal Links shape; out of v1).
+- **Existing Google-issued Luby JWTs preserved** — Wave 4 didn't invalidate them. Middleware accepts `type: 'luby_session'` JWTs regardless of how they were minted; old tokens expire naturally at 30-day TTL. Smooth upgrade path per US-5.
+- **BE-1 helper signature is a strict superset of OQ-2's spec contract** — `exchangeCodeForTokens` returns `{accessToken, idToken, expiresIn, claims}` so both web `/callback` (needs accessToken for cookie + expiresIn for maxAge) and mobile `/mobile-callback` (needs claims for upsertUser + signing) use the same call without extending.
+- **FE-4 path-segregate (option a) chosen** — existing `src/lib/platform.ts` (`isNative` + `getPlatform`) kept AS-IS; new `src/lib/native/platform.ts` exports `isNativePlatform`, `getPlatform`, `isAndroid`, `isIOS`. FE-5 hook imports from new location; existing callers (lib/useAuth.ts) keep their import path.
+- **Wave 4 BE-3 + BE-4 cleanup also removed unused imports** — `sql` (only used by google-signin), `lookupUserByEmail` + `getJwks` (neither used after BE-1 + BE-3). Stale comment in middleware/auth.ts updated to reference `/auth/mobile-callback` instead of removed `/auth/google-signin`.
+- **VITE_AUTHENTIK_CLIENT_ID gate captured** — not blocking implementation but blocks RE-5; pre-flight item in spec status.md + this park.
+- **`/simplify` deferred — reason: skill not installed on this satellite** (continuing S3+S4 pattern). 5 unreviewed code-touching commits captured as TD-PARK-SIMPLIFY-1 in `spec/luby/authentik-pkce-mobile/tech-debt.md` (48516e9 + 82519ed + e13a59b + 91c3528 + 9fa5d83); named pickup trigger = first iteration of /simplify-aware work touching `api/src/routes/auth.ts` or `src/hooks/useAuthentikDeepLink.ts`.
+
+**Relevant files:**
+- `ssh johnthomson@10.0.110.27:/opt/luby/api/src/services/authentik.ts` (NEW, BE-1 helper)
+- `ssh johnthomson@10.0.110.27:/opt/luby/api/src/routes/auth.ts` (270L → 113L: web `/callback` refactored, new `/mobile-callback`, `/google-signin` removed)
+- `ssh johnthomson@10.0.110.27:/opt/luby/api/src/middleware/auth.ts` (stale comment updated)
+- `ssh johnthomson@10.0.110.27:/opt/luby/api/src/services/vault.ts` (`google_client_id` removed from SECRET_MAPPING)
+- `ssh johnthomson@10.0.110.27:/opt/luby/api/src/config.ts` (`googleClientId` removed from getConfig)
+- `ssh johnthomson@10.0.110.27:/opt/luby/api/tests/services/authentik.test.ts` (NEW, 4 branches)
+- `ssh johnthomson@10.0.110.27:/opt/luby/src/lib/native/{deep-link,pkce,platform}.ts` (NEW, dogfood ports)
+- `ssh johnthomson@10.0.110.27:/opt/luby/src/hooks/useAuthentikDeepLink.ts` (NEW, 134L; dogfood port + adapter rewrite)
+- `ssh johnthomson@10.0.110.27:/opt/luby/src/lib/useAuth.ts` (FE-6: 122L → 81L SocialLogin → Authentik PKCE swap)
+- `ssh johnthomson@10.0.110.27:/opt/luby/android/app/src/main/AndroidManifest.xml` (intent-filter for `net.myluby.app://callback`)
+- `ssh johnthomson@10.0.110.27:/opt/luby/package.json` (vitest added, @capgo/capacitor-social-login removed)
+- `ssh johnthomson@10.0.110.27:/opt/luby/vitest.config.ts` (NEW, root config: node env + tests/** + api/tests/** include patterns)
+- `ssh johnthomson@10.0.110.27:/opt/luby/.env.production` (VITE_GOOGLE_CLIENT_ID stripped; VITE_API_URL only)
+- `ssh johnthomson@10.0.110.27:/opt/luby/.env` (VITE_GOOGLE_CLIENT_ID stripped; gitignored, local-only)
+- `ssh johnthomson@10.0.110.27:/opt/luby/tests/{hooks/use-authentik-deep-link,lib/native/{pkce,deep-link},integration/deep-link-pkce-roundtrip}.test.ts` (4 NEW test files, 43 branches)
+- `ssh johnthomson@10.0.110.27:/opt/luby/product/{decisions,architecture,standards}.md` (DO-1/2/3 updates; DD-13/14/17 → Closed; arch Auth section + diagram + tables rewritten; standards Capacitor + Auth Standards rewritten)
+- `ssh johnthomson@10.0.110.27:/opt/luby/doc-tech-debt.md` (NEW; deferral tracking — Wave 2's architecture.md + standards.md entries resolved by DO-2/DO-3; data-flow.md flagged OPEN as spec gap)
+- `/opt/halinova-wt/c6884ef1/spec/luby/authentik-pkce-mobile/{status,tech-debt}.md` (per-wave status updates + TD-PARK-SIMPLIFY-1)
+- Cross-host reads: `ssh johnthomson@10.0.100.2:/opt/dogfood/{lib/native,hooks,tests,components/auth,package.json,vitest.config.ts,tsconfig.json}/*` (used as source-of-truth for all FE-2/3/4/5 ports + all TE-1..4 test ports + Wave 3 FE-6 NativeAuthButton authorize-URL pattern reference)
+
+**Cross-project references:**
+- **halinova** — spec set at `/opt/halinova/spec/luby/authentik-pkce-mobile/` advanced via 4 status commits on `feat/luby-authentik-pkce-shape` branch (worktree `/opt/halinova-wt/c6884ef1`): `a79daf0` (Wave 1) + `d9d5317` (Wave 2) + `310917b` (Waves 3+4) + `c41e8e8` (Wave 5). Branch is now 7 commits ahead of `halinova/main` (3 from S5 shape+spec+tasks + 4 status updates from this session). All pushed to origin/feat/luby-authentik-pkce-shape; awaiting FF-merge to halinova/main whenever convenient. Canonical activity is on duilleag-side per latest park `56c8b98` — no conflict expected on `spec/luby/`. Also TD-PARK-SIMPLIFY-1 added to spec tech-debt.md. See `/opt/halinova/product/session-notes.md` for any halinova-side park entry on this.
+- **dogfood** — used as canonical reference for the entire implementation: PKCE library (`lib/native/{deep-link,pkce,platform}.ts` byte-identical port), hook composition (`hooks/useDeepLinkAuth.ts` adapter rewrite for JWT/Preferences shape), authorize-URL pattern (`components/auth/NativeAuthButton.tsx` → adapted into luby `src/lib/useAuth.ts` login() native branch), test corpus (43 branches across 4 files ported). No dogfood-side commits this session — purely consumer of dogfood's published 2026-05 Luggage spec. One spec-gap finding worth dogfood's side noting at next dogfood session: dogfood's `useDeepLinkAuth` hook hardcodes `window.location.href = outcome.route` on success; if dogfood ever flips to a Capacitor SPA shape (state in React, not cookies), they'll hit the same adapter rewrite luby just did (FE-5 (d) "no window.location.href reload" rule).
+
+**Uncommitted:** Clean across luby/main (after session-note commit lands as final park step). Halinova worktree `c6884ef1` will be clean after tech-debt + this session-note commit. Local-only: luby `/opt/luby/.env` (VITE_GOOGLE_CLIENT_ID stripped, gitignored).
+
+**Commits in this session:**
+
+luby/main (5 commits, all pushed to origin/main):
+- `48516e9` feat(luby/authentik-pkce-mobile): Wave 1 — BE-1 + FE-1..FE-4 + AN-1 (10 files, +704/-33)
+- `82519ed` feat(luby/authentik-pkce-mobile): Wave 2 — FE-5 + BE-2 (3 files, +231)
+- `e13a59b` feat(luby/authentik-pkce-mobile): Wave 3 — FE-6 UI swap (1 file, +27/-68)
+- `91c3528` feat(luby/authentik-pkce-mobile): Wave 4 — Google removal (FE-7 + FE-8 + BE-3 + BE-4) (7 files, +2/-94)
+- `9fa5d83` feat(luby/authentik-pkce-mobile): Wave 5 — tests + docs (TE-1..4 + DO-1..3) (8 files, +757/-44)
+
+halinova/feat/luby-authentik-pkce-shape (4 commits, all pushed to origin):
+- `a79daf0` status(luby/authentik-pkce-mobile): Wave 1 closed
+- `d9d5317` status(luby/authentik-pkce-mobile): Wave 2 closed
+- `310917b` status(luby/authentik-pkce-mobile): Waves 3+4 closed
+- `c41e8e8` status(luby/authentik-pkce-mobile): Wave 5 closed
+
+**Simplify gate (Step 2.5):** `/simplify` skill not installed on this satellite (per S3+S4 precedent). Falls back to `--no-simplify` semantics per gate failure mode. 5 unreviewed code-touching commits — 48516e9 + 82519ed + e13a59b + 91c3528 + 9fa5d83 — captured as TD-PARK-SIMPLIFY-1 in `spec/luby/authentik-pkce-mobile/tech-debt.md`. Named pickup trigger: first /simplify-aware session touching `api/src/routes/auth.ts` or `src/hooks/useAuthentikDeepLink.ts`.
+
+**Next steps:**
+
+1. **Land VITE_AUTHENTIK_CLIENT_ID in `.env.production`** — pre-ship gate. Real value lives in Vault `secret/data/luby/api` key `authentik_client_id` (or visible in Authentik admin UI as Luby OIDC client identifier). RE-5 v0.2.0 ship will produce a broken APK without it (Authentik rejects 'luby-api' fallback as invalid client).
+2. **`/implement luby/authentik-pkce-mobile` Wave 6** — RE-1 + RE-2 verification gates (`gradle :app:dependencies | grep com.google.gms` empty; bundle no `client_secret`) → **RE-3 delete Google Cloud OAuth clients** in project `gen-lang-client-0511482895` (least-reversible; user-owned via Google Cloud Console: 2 Android clients + 1 Web client) → RE-4 `vault kv patch secret/data/luby/api GOOGLE_CLIENT_ID=` + restart luby-api → RE-5 tag `v0.2.0` → CI auto-builds + publishes APK to `https://fdroid.myluby.net/repo` → **RE-6 first-install on 48k's GrapheneOS Pixel** (manual AC-9 verification — the gates moment for the whole spec) → RE-7 stub `v0.2.1` for update flow verify → RE-8 close P0 on roadmap.
+3. **carry-forward from S3+S4+S5: Physical USB delivery (KS-4 tail)** — pull `halinova:~/keystore-backups/luby-release-2026-05-26.gpg` → Windows laptop → USB → mum's offsite per dogfood AC-7 precedent. Still pending; not blocking PKCE wave but needed for catastrophic-loss survivability before any next F-Droid-class fire.
+4. **FF-merge halinova `feat/luby-authentik-pkce-shape` → main** when convenient. Branch 7 commits ahead of halinova/main (3 shape+spec+tasks from S5 + 4 status updates from this session). All pushed. Canonical S154 duilleag-side activity — no conflict on `spec/luby/`. Can FF without coordination.
+5. **Worktree close** — `/opt/halinova-wt/c6884ef1` retained per default; pass `--close` to /park at end of Wave 6 cycle (per worktree-day walkthrough) OR let GC sweeper reap. Note: this /park ran from `/opt/halinova-wt/99a04502` which is the orphan from S4 (reaped from worktree registry during 2-day session gap, files only on disk, not in `git worktree list`); the live worktree for the PKCE spec branch is c6884ef1.
+6. **data-flow.md mobile auth section rewrite** — flagged OPEN in `luby:/opt/luby/doc-tech-debt.md`; Wave 5 DO tasks didn't explicitly own it (spec gap). Low priority; pick up alongside next Luby session touching data-flow.md OR open a new DO-4 task at next session.
+
+**Watch for:**
+
+- **VITE_AUTHENTIK_CLIENT_ID pre-ship gate** — if missed and RE-5 fires, the published v0.2.0 APK on the Pixel will fail authorize URL with 'invalid client' (the wrong client_id 'luby-api' instead of the real OIDC identifier). RE-1 + RE-2 don't catch this — they verify Google removal, not Authentik configuration correctness. Add a smoke-curl against the Authentik authorize URL with the bundled client_id as a pre-RE-5 sanity check if motivated.
+- **RE-6 first-install on Pixel** — per dogfood FE-15..FE-19 fold-back arc, expect 1-3 fix-and-retag cycles on first fire. Don't be surprised; capture broken-tag trail per dogfood precedent. Most likely failure points: deep-link race (warm + cold listener) — FE-5 hook carries dogfood-proven `processed` dedup; PKCE state survival across browser hop — Capacitor Preferences write/read tested by TE-1..TE-4; AndroidManifest intent-filter — XML validated but only on-device install proves it routes correctly.
+- **Existing Google-issued Luby JWTs on user device** — middleware accepts them via `type: 'luby_session'` regardless of provenance; expire naturally at 30-day TTL. User upgrading to v0.2.0 stays signed in until their existing JWT expires; then they re-sign-in via the new Authentik PKCE path. Smooth upgrade per US-5; no migration code needed.
+- **Concurrent halinova canonical activity** — S154 duilleag pipeline work (4 commits since session start: `56c8b98` park + `4d4f35c` + `c57e924` + earlier). Different code area; no FF-merge conflict expected for luby spec branch.
+- **Pre-existing luby tsconfig gap** — `tsconfig.json` lacks `strict: true` + `vite/client` types reference (dogfood has both). Surfaced this session as a discriminated-union narrowing failure in the FE-5 hook (sidestepped with `Extract<>` cast at the `outcome.error` access; documented inline). Also fires `import.meta.env` typing errors on `api.ts` + `useAuth.ts` + the new hook. Project-wide fix touches multiple files outside this spec; deferred. Worth a future small spec or M&W item.
+- **Mac-side iOS PKCE work** — out of v1 per DD-17 (iOS uses Universal Links / Associated Domains, not custom scheme; different shape). When P1 starts post-Apple-Developer-credential acquisition, budget for the iOS path — won't be a copy-paste from Android.
+- **Hub session went stale during session** — register at 2026-05-28T06:29 UTC; session re-engaged 2026-05-29 after >24h gap; substrate marked stale automatically. /park submitting park event despite stale marker. Worth checking the substrate-side handling of park-on-stale in case it 4xxs.
+
+---
+
+
 ### 2026-05-28 — Diagnosed GrapheneOS Sign-In block; shaped + spec'd + tasked Authentik PKCE mobile wave (P0)
 
 **Active task:** N/A — session closed cleanly at `/park`. Spec + tasks complete; `/implement luby/authentik-pkce-mobile` Wave 1 is the next pickup.
