@@ -10,17 +10,16 @@ The health tracking platform is live at myluby.net.
 
 ## Current Focus
 
-**P0 Authentik PKCE mobile sign-in is active** (shaped 2026-05-28; spec at `/opt/halinova/spec/luby/authentik-pkce-mobile/`). Closes DD-17 GrapheneOS Sign-In blocker by replacing Google Sign-In on mobile with Authentik OIDC PKCE custom-scheme; mirrors dogfood's proven 2026-05 Luggage pattern.
+**P0 Authentik PKCE mobile sign-in shipped 2026-05-30** — v0.2.0 + v0.2.1 live on household F-Droid; AC-9 first-install verified end-to-end on 48k's GrapheneOS Pixel. Closes DD-17 (GrapheneOS Sign-In blocker). Spec at `/opt/halinova/spec/luby/authentik-pkce-mobile/`.
 
 **P0 F-Droid Distribution shipped 2026-05-26** — Luby installable + updatable via household F-Droid at `https://fdroid.myluby.net/repo`, release-signed APK pipeline live on `v*` tags. Spec at `/opt/halinova/spec/luby/fdroid-distribution/`.
 
 **Most pickup-ready next moves**, in order of friction-cost:
 
-1. **P0 Authentik PKCE implementation** — spec ready; `/write-spec` → `/create-tasks` → `/implement` sequence. Unblocks primary user (GrapheneOS) on F-Droid Android app.
-2. **Maintenance items** (Maintenance & Watch section below) — small, no external dependencies, can be batched into one PR.
-3. **P5 expansion** of historical charts beyond the food-only `BarChart` already shipped — purely additive, no new infrastructure.
-4. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase) — blocks the rest of P1; need 48k to start these processes externally.
-5. **P4 voice client** — `GET /ai/live-token` server scaffold exists; client-side voice UI is greenfield.
+1. **Maintenance items** (Maintenance & Watch section below) — small, no external dependencies, can be batched into one PR. Includes Vault-vs-`.env` source-of-truth audit (now with concrete data point from PKCE Wave 6 — luby-api runs env-only despite DD-6 claim).
+2. **P5 expansion** of historical charts beyond the food-only `BarChart` already shipped — purely additive, no new infrastructure.
+3. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase) — blocks the rest of P1; need 48k to start these processes externally.
+4. **P4 voice client** — `GET /ai/live-token` server scaffold exists; client-side voice UI is greenfield.
 
 P1 cannot meaningfully advance until the external credentials are in hand; P2/P3 are larger scoped greenfield work.
 
@@ -46,20 +45,20 @@ Basic recharts `BarChart` of the last 7 food entries shipped in `App.tsx:536`. F
 
 ## What's Next
 
-### Priority 0: Authentik PKCE mobile sign-in — current
+### Priority 0: Authentik PKCE mobile sign-in — shipped 2026-05-30
 
 *Spec at `/opt/halinova/spec/luby/authentik-pkce-mobile/` — shaped 2026-05-28; closes DD-17 (GrapheneOS Sign-In blocker) by replacing Google Sign-In on mobile with Authentik OIDC PKCE custom-scheme. Mirrors dogfood's 2026-05 Luggage pattern (D-SINGLE-AUTHENTIK-CLIENT, FR-19). Android-only at v1; iOS deferred to P1.*
 
-- [ ] Authentik admin: extend Luby OIDC client with `net.myluby.app://callback` redirect URI + enable PKCE
-- [ ] Port dogfood PKCE library (`/opt/dogfood/lib/native/{deep-link,pkce,platform}.ts` + `/opt/dogfood/hooks/useDeepLinkAuth.ts`) into Luby `src/lib/native/` + `src/hooks/`
-- [ ] AndroidManifest intent-filter for `net.myluby.app://callback`
-- [ ] Server `POST /api/v1/auth/mobile-callback` endpoint (Authentik token exchange + JWKS verify + `lookupUserByEmail` + Luby HS256 JWT issue)
-- [ ] Replace mobile sign-in UI in `src/lib/useAuth.ts`: drop SocialLogin block, add Authentik PKCE flow
-- [ ] Remove Google Sign-In end-to-end: `@capgo/capacitor-social-login` package, `POST /auth/google-signin` route, `GOOGLE_CLIENT_ID` in Vault + env, Google Cloud OAuth Android (debug + release) + Web clients in project `gen-lang-client-0511482895`
-- [ ] DD status updates in `product/decisions.md`: DD-1 → closed, DD-13 → closed, DD-14 → closed, DD-17 → closed
-- [ ] NFR-7 parity verification (`gradlew :app:dependencies | grep com.google.gms` returns empty — mirrors dogfood spec NFR-7)
-- [ ] Test coverage: port at least dogfood's `tests/hooks/use-deep-link-auth.test.ts` (7 vitest branches); full 43-test corpus stretch
-- [ ] F-Droid release: cut `v0.2.0` tag (material API-level auth change); first-install verification on 48k's GrapheneOS Pixel; in-place update preserves session
+- [x] Authentik admin: extend Luby OIDC client with `net.myluby.app://callback` redirect URI + enable PKCE
+- [x] Port dogfood PKCE library (`/opt/dogfood/lib/native/{deep-link,pkce,platform}.ts` + `/opt/dogfood/hooks/useDeepLinkAuth.ts`) into Luby `src/lib/native/` + `src/hooks/`
+- [x] AndroidManifest intent-filter for `net.myluby.app://callback`
+- [x] Server `POST /api/v1/auth/mobile-callback` endpoint (Authentik token exchange + JWKS verify + `lookupUserByEmail` + Luby HS256 JWT issue)
+- [x] Replace mobile sign-in UI in `src/lib/useAuth.ts`: drop SocialLogin block, add Authentik PKCE flow
+- [x] Remove Google Sign-In end-to-end: `@capgo/capacitor-social-login` package, `POST /auth/google-signin` route, `GOOGLE_CLIENT_ID` in Vault + env, Google Cloud OAuth Android (debug + release) + Web clients in project `gen-lang-client-0511482895` *(Vault key removal deferred per TD-WAVE6-RE4-VAULT-PATCH-DEFERRED; GCP OAuth client deletion is user-owned, pending)*
+- [x] DD status updates in `product/decisions.md`: DD-1 → closed, DD-13 → closed, DD-14 → closed, DD-17 → closed
+- [x] NFR-7 parity verification (`gradlew :app:dependencies | grep com.google.gms` returns empty — mirrors dogfood spec NFR-7)
+- [x] Test coverage: port at least dogfood's `tests/hooks/use-deep-link-auth.test.ts` (7 vitest branches); full 43-test corpus stretch *(47/47 across 5 files)*
+- [x] F-Droid release: cut `v0.2.0` tag (material API-level auth change); first-install verification on 48k's GrapheneOS Pixel; in-place update preserves session *(v0.2.0 shipped; v0.2.1 stub fired for update-flow verify)*
 
 ### Priority 0: F-Droid Distribution — completed 2026-05-26
 
