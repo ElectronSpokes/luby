@@ -27,6 +27,8 @@ Mobile App (Capacitor)              Web App (CF Pages)
             └── systemd on 10.0.110.27
 ```
 
+> **Full system wiring** (devices → Cloudflare edge → on-prem → LLM, with auth + CI/CD flows): see [`system-diagram.md`](./system-diagram.md).
+
 ## Tech Stack
 
 | Layer | Choice | Rationale |
