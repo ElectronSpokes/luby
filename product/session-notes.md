@@ -7,6 +7,43 @@
 
 <!-- newest first -->
 
+### 2026-05-31 — Full review→hardening→feature sweep + uncovered & fixed a 3-month-stale web deploy
+
+**Active task:** N/A — session closed cleanly at /park ("great job today, lets park; i can look into the others from their own springboards").
+
+**Pending user asks:** None. User deferred dogfood-build + cosmogenic investigations to those projects' own springboards.
+
+**In progress:** Nothing. Six PRs merged + several direct landings; all verified.
+
+**Blocked:** Nothing on Luby. (dogfood.band + cosmogenic web are stale — see Cross-project references — but deferred by the user to their own springboards.)
+
+**Decisions:**
+- **DD-6 amended** — ratified `.env`-primary reality (systemd unit loads only `/opt/luby/api/.env`, never `config-env/vault.env`; startup logs "No Vault config"). Vault is a warm standby. Reconciled the drifted `session_secret` into Vault (KV v2 v2) so a future wiring-flip can't silently invalidate mobile JWTs.
+- **DD-16 resolved** — CORS narrowed from open-reflection (`origin:(o)=>o||'*'`) to a closed 7-origin allowlist. Android native origin is `https://localhost` (Cap8 default scheme) — corrected from stale `http://localhost` note.
+- **DD-18 added** — VM Node 20→24 LTS (unblocks `@capacitor/cli` v8; `engines.node>=22`). luby-api is Bun, untouched.
+- `/simplify` gate: origin-ahead-only fallback (no substrate session), nothing ahead → silent skip. PR #1 was itself a /simplify pass.
+
+**Relevant files:**
+- `ssh johnthomson@10.0.110.27:/opt/luby/` — src/App.tsx (P5 charts), api/src/index.ts (CORS), api/src/routes/auth.ts + services/authentik.ts + lib/api.ts + hooks/useAuthentikDeepLink.ts (PR#1 simplify), api/migrations/001-initial-schema.sql (email invariant), package.json + android/*.gradle (Cap8), README.md, product/{decisions,roadmap,data-flow,architecture,system-diagram.md+png}
+- Infra (no repo): Forgejo push-mirror `halinova/luby` recreated w/ fresh PAT; CF Pages `luby` manual deploy triggered (c5fa25bc, deploy:success)
+- `~/.claude/projects/-opt-halinova/memory/ref-diagram-tooling.md` (new)
+
+**Cross-project references:**
+- **dogfood** — Forgejo→GitHub push mirror was auth-broken (same expired ElectronSpokes PAT); **fixed** (delete+recreate w/ new token, GitHub caught up to 7d90067, auto-sync restored). BUT dogfood.band is stale from a SEPARATE cause: **CF Pages builds are FAILING** (3× build:failure on current main since ~May 26) — needs the build log diagnosed from dogfood's own springboard. See `ssh johnthomson@10.0.100.2:/opt/dogfood/product/session-notes.md`.
+- **halinova** — Luby Authentik-PKCE spec set landed on halinova/main (merge `ab6dc87`), TD-PARK-SIMPLIFY-1 closed; `mmdc-png` (mermaid-cli) installed on HALINOVA; 4 Hub learnings banked (7d456666 simplify-cast, vault-drift, 1640ed61 two-break-deploy, diagram-tooling). See `/opt/halinova/product/session-notes.md`.
+
+**Uncommitted:** Clean. Luby main in sync with origin (0 ahead/behind). All 6 PRs merged + branches pruned.
+
+**Next steps:**
+1. **luby CF Pages auto-build is DEAD since ~Mar 3** — GitHub App webhook stopped firing builds on push (web was 3mo stale, hidden behind the also-broken mirror). Reconnect the GitHub App in CF Pages dashboard (luby project → Settings → Builds & deployments) so pushes auto-deploy; until then every web deploy needs a manual CF API trigger.
+2. **Rotate the GitHub PAT** — `ghp_…` was shared in plaintext (no expiry). Regenerate + store in Vault `secret/halinova/github` + rotation reminder (silent expiry caused this whole incident; covers luby+dogfood).
+3. **P5 tail** (optional, additive) — fasting-history chart, day-aggregation, weekly/monthly server summaries. Cut a `v*` tag to ship the new charts to the Pixel app (web has them now).
+4. dogfood + cosmogenic — deferred to their own springboards (dogfood CF build failure; cosmogenic CF last deploy Mar 15, unchecked).
+
+**Watch for:** myluby.net now serves the P5 charts (bundle `index-CtkilbaN.js`). luby-api was **restarted** mid-session (CORS deploy) and the **VM is now on Node 24**. Vault `session_secret` reconciled. Both luby + dogfood GitHub mirrors now auto-sync (8h interval + on-commit). The luby CF auto-build still needs the dashboard reconnect (#1) — until then merges won't auto-appear on the web.
+
+---
+
 ### 2026-05-29 — Authentik PKCE mobile sign-in spec — Waves 1–5 landed end-to-end (5 luby/main commits + 4 halinova status commits); Wave 6 release fire pending
 
 **Active task:** N/A — session closed cleanly at /park after user picked "/park here; come back fresh for Wave 6" from cadence question. Code side of `spec/luby/authentik-pkce-mobile` is COMPLETE; only the release fire (Wave 6 RE-1..RE-8) remains.
