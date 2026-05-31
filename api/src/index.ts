@@ -24,8 +24,22 @@ const app = new Hono<AppEnv>();
 
 // Global middleware
 app.use('*', logger());
+// CORS allowlist (DD-16): narrowed from reflecting ANY origin to a closed set.
+// Catalogue — production web + Capacitor native webview + local dev. The Android
+// native webview Origin is https://localhost (Capacitor 8 default androidScheme=https);
+// iOS is capacitor://localhost. http://localhost kept as a belt-and-suspenders for any
+// http-scheme variant. credentials:true forbids '*', so each origin is reflected explicitly.
+const ALLOWED_ORIGINS = [
+  'https://myluby.net',
+  'https://www.myluby.net',
+  'https://localhost',        // Capacitor Android (shipped)
+  'capacitor://localhost',    // Capacitor iOS (P1)
+  'http://localhost',         // http-scheme variant fallback
+  'http://localhost:3000',    // local web dev (vite --port=3000)
+  'http://10.0.110.27:3000',  // LAN web dev / live-reload
+];
 app.use('*', cors({
-  origin: (origin) => origin || '*',
+  origin: ALLOWED_ORIGINS,
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
