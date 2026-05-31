@@ -547,6 +547,52 @@ function AppContent({ user, onLogout }: { user: any; onLogout: () => void }) {
                     </div>
                   </div>
 
+                  <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                      <h2 className="text-xl font-bold text-slate-800">Hydration</h2>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-sky-500" />
+                        <span className="text-xs font-medium text-slate-500">ml per log</span>
+                      </div>
+                    </div>
+                    <div className="h-[250px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={hydrationEntries.slice(-7)}>
+                          <XAxis dataKey="timestamp" tickFormatter={(t) => format(t, 'MMM d')} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                          <YAxis hide />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                            labelFormatter={(t) => format(t, 'MMMM do')}
+                          />
+                          <Bar dataKey="amount" fill="#0ea5e9" radius={[4, 4, 0, 0]} barSize={20} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                      <h2 className="text-xl font-bold text-slate-800">Movement</h2>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-amber-500" />
+                        <span className="text-xs font-medium text-slate-500">minutes per session</span>
+                      </div>
+                    </div>
+                    <div className="h-[250px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={movementEntries.slice(-7)}>
+                          <XAxis dataKey="timestamp" tickFormatter={(t) => format(t, 'MMM d')} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                          <YAxis hide />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                            labelFormatter={(t) => format(t, 'MMMM do')}
+                          />
+                          <Bar dataKey="duration" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={20} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
                   <div className="bg-slate-900 p-8 rounded-[2rem] text-white relative overflow-hidden">
                     <div className="relative z-10">
                       <h2 className="text-2xl font-bold mb-2">Fasting Status</h2>
