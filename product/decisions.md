@@ -138,3 +138,14 @@
 **Status:** Closed 2026-05-30 — implementation + ship complete. Waves 1-5 landed (BE/FE/AN/TE/DO) + Wave 6 release fire shipped v0.2.0 (versionCode 56) + v0.2.1 (57) to https://fdroid.myluby.net/repo. AC-9 verified live by 48k: F-Droid install → Authentik PKCE flow → authenticated UI on GrapheneOS Pixel. RE-3 (Google Cloud OAuth client deletion in project gen-lang-client-0511482895) + RE-4 (Vault GOOGLE_CLIENT_ID kv patch — see TD-WAVE6-RE4-VAULT-PATCH-DEFERRED in spec tech-debt.md) outstanding as cleanup tails; do not gate ship.
 **Watch for:** PKCE custom-scheme callback on Capacitor 8 has known fragility with deep-link races when the app is killed during the browser hop — see dogfood's Wave 1 Phase B notes (`/opt/dogfood/product/session-notes.md`, parks 2026-05-04) for the proven fix pattern. iOS will need a parallel Universal Links / Associated Domains shape; out of scope at first cut.
 **Supersedes:** DD-1 (mobile path: Google Sign-In → Authentik OIDC PKCE; replace, not parallel — shape decision D-REPLACE-NOT-PARALLEL). DD-13 (Capacitor SocialLogin static-import rule moot once plugin is removed). DD-14 (no JWT audience check on Google id_tokens — moot once Google id_token verification is removed; Authentik id_token audience IS checked per JWKS pattern).
+
+
+## DD-18: VM system Node 20 -> 24 LTS (unblocks Capacitor 8 CLI)
+
+**Date:** 2026-05-31
+**Decision:** Upgrade the luby VM's system Node from 20.20.0 -> 24 LTS (nodesource apt channel `node_20.x` -> `node_24.x`; installed 24.15.0 / npm 11), then bump `@capacitor/cli` `^7.5.0` -> `^8.1.0` (resolves 8.3.4) to align with the `^8.x` runtime.
+**Rationale:** Node 20 is sliding into maintenance; Node 24 is Active LTS (supported ~2028). `@capacitor/cli` v8 requires `engines.node >=22`, so the VM's Node 20 was the blocker for the long-standing version-mismatch maintenance item. One upgrade clears both the LTS-currency and the Capacitor-8 blocker.
+**Blast radius (verified minimal):** luby-api runs on **Bun**, not Node -- it did not restart and stayed healthy throughout (uptime unchanged). The deployed web frontend is built by **Cloudflare Pages** (its own Node); CI APK builds run in the **`android-build-box` container** (its own Node). The VM's system Node serves ONLY local dev tooling (Vite `npm run build`, `npx cap sync`).
+**Verification:** `node -v` 24.15.0; `npx cap --version` 8.3.4 (was fatal on Node 20); `npm run build` (Vite) clean; `npx cap sync android` clean (also regenerated `android/*.gradle`, incidentally removing stale `@capgo/capacitor-social-login` project refs left from DD-17's Google removal); 47/47 vitest green.
+**Rollback:** re-point nodesource `node_24.x` -> `node_20.x` (backup at `/etc/apt/sources.list.d/nodesource.sources.bak-20x`) + `apt install nodejs=20.20.2-1nodesource1`. Safe -- nothing runtime depends on system Node.
+**Closes:** the "@capacitor/cli version bump" Maintenance & Watch item.
