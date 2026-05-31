@@ -8,8 +8,7 @@ import {
 } from '../lib/native/deep-link';
 import { consumeChallenge } from '../lib/native/pkce';
 import { isNativePlatform } from '../lib/native/platform';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://10.0.110.27:3001';
+import { API_URL } from '../lib/api';
 
 export const AUTHORIZE_URL =
   import.meta.env.VITE_AUTHENTIK_AUTHORIZE_URL ||
@@ -100,10 +99,9 @@ export function useAuthentikDeepLink(
       const outcome = await exchangeCallback(params);
       if (cancelled) return;
       if (!outcome.ok) {
-        // Cast: luby tsconfig lacks `strict: true` (vs dogfood) so control-
-        // flow narrowing on discriminated unions doesn't propagate here.
-        // Fixing project-wide is out of this wave's scope (same gap affects
-        // src/lib/{api,useAuth}.ts on import.meta.env access).
+        // Cast required: luby's tsconfig is non-strict, so TS does not narrow
+        // this discriminated union on the boolean `ok` discriminant in the
+        // negative branch (verified: removing the cast yields TS2339 on .error).
         const failure = outcome as Extract<CallbackOutcome, { ok: false }>;
         console.error('[auth] Native callback exchange failed:', failure.error);
         return;

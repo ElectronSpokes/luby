@@ -89,6 +89,8 @@ authRoutes.get('/callback', async (c) => {
   }
 });
 
+// KEEP IN SYNC with src/lib/native/deep-link.ts NATIVE_REDIRECT_URI and the
+// Android intent-filter (scheme net.myluby.app / host callback). No shared client/server module.
 const NATIVE_REDIRECT_URI = 'net.myluby.app://callback';
 const MOBILE_JWT_TTL_SECONDS = 30 * 24 * 60 * 60;
 
