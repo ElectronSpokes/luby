@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   sub TEXT UNIQUE NOT NULL,
-  email TEXT,
+  email TEXT, -- intentionally NOT UNIQUE: user identity/matching is by `sub`; see DD-15 (email-collision caveat)
   name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

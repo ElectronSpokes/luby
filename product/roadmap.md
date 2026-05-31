@@ -126,13 +126,13 @@ Small items with no priority slot. Batchable; pick up alongside any active work.
 
 | Item | Source | Notes |
 |------|--------|-------|
-| `@capacitor/cli` version bump | observed | Pinned at `^7.5.0` while runtime `@capacitor/*` is `^8.x`. Verify intentional or bump to 8.x. |
-| `data-flow.md` migration path fix | observed | References `api/src/db/migrations/` — actual path is `api/migrations/`. One-line fix when touched. |
-| Promote `users.email` UNIQUE consideration | DD-15 watch-for | Schema allows duplicate-email rows; matching logic prevents in practice. Decide whether to add `UNIQUE(email)` constraint or document the invariant. |
-| Catalogue Capacitor origins, narrow CORS | DD-16 watch-for | Currently `origin: (origin) => origin`. Catalogue iOS dev/release + Android dev/release origins, then narrow to allowlist + production web origin. |
+| `@capacitor/cli` version bump | observed | **Deferred 2026-05-31 (S155):** can't bump — `@capacitor/cli` v8 requires Node ≥22 (`engines.node >=22.0.0`); luby VM runs Node v20.20.0. The v7 CLI is benign with the v8 runtime (app builds + ships fine), so the mismatch is cosmetic. Revisit when the VM's Node is upgraded to 22 LTS. |
+| ~~`data-flow.md` migration path fix~~ ✓ | observed | **RESOLVED 2026-05-31 (S155):** already correct on inspection — `data-flow.md` references `api/migrations/` + `api/src/db/migrate.ts`; the wrong `src/db/migrations/` path was not present. Stale item. |
+| ~~Promote `users.email` UNIQUE consideration~~ ✓ | DD-15 watch-for | **RESOLVED 2026-05-31 (S155):** chose *document the invariant* (not add constraint — that's a schema migration with dup-row risk). Documented at the schema source (`001-initial-schema.sql`) + already in DD-15 + architecture.md. Adding `UNIQUE(email)` remains a future option if matching ever moves off `sub`. |
+| Catalogue Capacitor origins, narrow CORS | DD-16 watch-for | **Catalogued (S155):** allowlist = `https://myluby.net`, `https://www.myluby.net`, `http://localhost` + `capacitor://localhost` (Android/iOS native webview), `http://localhost:3000` + `http://10.0.110.27:3000` (dev). Current code: `origin: (origin) => origin \|\| '*'`. **Narrowing deferred to its own PR** — behavior change; must be verified against the live web app AND the on-device Android app before merge (wrong allowlist = app cannot reach API). |
 | `App.tsx` refactor threshold | DD-8 watch-for | Currently 1082 lines (~54% of 2000-line threshold). No action yet; revisit if it crosses ~1500. |
 | ~~Vault-vs-`.env` source-of-truth audit~~ ✓ | DD-6 + systemd config | **RESOLVED 2026-05-31 (S155):** env-primary confirmed (unit loads only `.env`); DD-6 amended; `session_secret` drift reconciled into Vault (warm standby). See DD-6 amendment. |
-| Root `README.md` is generic template | observed S4 | Root `/opt/luby/README.md` is the generic `northernlights` Claude Code project-setup template (refs `hudson/northernlights` repo, `.claude/` layout), not Luby-specific. Surfaced when RE-4 needed a trivial commit and CHANGELOG.md was seeded instead. Rewrite when next touched — one short Luby-specific intro + pointer to `product/` doc set. |
+| ~~Root `README.md` is generic template~~ ✓ | observed S4 | **RESOLVED 2026-05-31 (S155):** rewritten Luby-specific (stack, structure, dev quickstart, pointer to `product/` doc set). |
 
 ## Product Lines
 

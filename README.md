@@ -1,135 +1,41 @@
-# northernlights
+# Luby
 
-Dev project for Claude Code project setup. This is a living code space for Claude projects best practices.
+Personal wellness tracking — food, hydration, movement, fasting timers, and AI coaching.
+Live at [myluby.net](https://myluby.net); installable on Android via the household F-Droid repo (`fdroid.myluby.net`).
 
-## Quick Start
+## Stack
 
-```bash
-# Clone
-git clone http://git.theflux.life:3000/hudson/northernlights.git
-cd northernlights
+| Layer | Tech |
+|-------|------|
+| Frontend | React 19 + TypeScript + Vite + Tailwind v4 |
+| Mobile | Capacitor 8 (Android + iOS scaffolds) |
+| API | Hono + Bun (`api/`, port 3001) |
+| Database | PostgreSQL 16 |
+| AI | Google Gemini 2.5 Flash (7 proxy endpoints) |
+| Auth | Authentik OIDC — web (session cookie) + Android (OIDC PKCE custom-scheme) |
+| Hosting | Cloudflare Pages (web) + Cloudflare Tunnel (API) |
 
-# Start Claude Code
-claude
+## Structure
+
 ```
-
-## Project Structure
-
-```
-northernlights/
-├── .claude/              # Claude Code configuration
-│   ├── CLAUDE.md         # Project knowledge (the source of truth)
-│   ├── settings.json     # Permissions
-│   ├── commands/         # Slash commands
-│   ├── subagents/        # Specialized agents
-│   ├── hooks/
-│   └── rules/            # Shared learnings from fleet (NEW)
-│       ├── common-mistakes.md
-│       ├── patterns.md
-│       ├── decisions.md
-│       ├── hub-integration.md
-│       └── satellite-provisioning.md
-├── .forgejo/workflows/   # CI/CD
-├── experiments/          # Individual experiments
-└── README.md             # This file
+api/            Hono + Bun API (routes, services, migrations)
+src/            React SPA (components, hooks, lib)
+android/ ios/   Capacitor native shells
+product/        Product docs (architecture, decisions, roadmap, system-diagram, …)
+metadata/       F-Droid listing metadata
 ```
 
 ## Development
 
-This project uses Claude Code with the Boris workflow.
-
-### Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `/new-experiment` | Create a new experiment directory |
-| `/plan-feature` | Plan before implementing (use Plan mode) |
-| `/code-review` | Review staged changes |
-| `/commit-push-pr` | Ship changes |
-| `/compound` | Capture learnings (auto-pushes to hub) |
-| `/hub-search` | Search hub before implementing |
-| `/new-munro` | Create a new satellite project |
-
-### Workflow
-
-1. **Plan** - Use `/plan-feature` or Plan mode (Shift+Tab twice)
-2. **Implement** - Switch to auto-accept once plan is solid
-3. **Review** - Use `/code-review` to check work
-4. **Ship** - Use `/commit-push-pr` to commit and push
-
-## Rules Files (Fleet Learnings)
-
-The `.claude/rules/` directory contains shared learnings from across the Northernlights fleet:
-
-| File | Purpose |
-|------|---------|
-| `common-mistakes.md` | API, Proxmox, Docker errors to avoid |
-| `patterns.md` | Proven development approaches |
-| `decisions.md` | Architecture decisions |
-| `hub-integration.md` | Hub tools and workflows |
-| `satellite-provisioning.md` | Deployment guide |
-| `validate-config.sh` | Validation script |
-
-These files are auto-loaded by Claude based on relevance. Update them via `/compound` to share learnings across all satellites.
-
-### Syncing Rules to Satellites
-
 ```bash
-# On satellite: pull latest rules
-git remote add starter http://git.theflux.life:3000/hudson/northernlights.git
-git fetch starter
-git checkout starter/main -- .claude/rules/
+npm install
+npm run dev                       # Vite dev server on :3000
+cd api && bun run src/index.ts    # API on :3001 (reads api/.env)
+npm test                          # vitest
 ```
 
-### Validating Setup
+Production APKs build via Forgejo Actions on `v*` tags and publish to the household F-Droid repo. The web frontend auto-deploys to Cloudflare Pages on push to `main` (via the GitHub mirror).
 
-```bash
-bash .claude/rules/validate-config.sh
-```
+## Docs
 
-## Hub Integration
-
-Connect to the **Northernlights Hub** for cross-project knowledge sharing:
-
-```bash
-claude mcp add-json northernlights-hub --scope user '{
-  "command": "/home/johnthomson/.bun/bin/bun",
-  "args": ["run", "/opt/northernlights-hub/mcp/src/index.ts"],
-  "env": {
-    "HUB_API_URL": "http://northernlights-hub.theflux.life:3100",
-    "HUB_API_KEY": "<your-key>",
-    "CURRENT_PROJECT_ID": "<project-id>"
-  }
-}'
-```
-
-Then use `/hub-search` before implementing, and `/compound` will auto-push universal learnings.
-
-## Setting Up New Satellites
-
-**Important:** Always run satellite setup from the hub VM, not from other satellites.
-
-See `.claude/rules/satellite-provisioning.md` for the full guide.
-
-Quick steps:
-1. Clone template to new satellite
-2. Customize CLAUDE.md
-3. Create springboard.yaml config
-4. Register with Hub
-5. Setup MCP server
-
-## The Compound Loop
-
-```
-Plan → Work → Review → COMPOUND → (repeat)
-                          ↓
-                    Mistakes → Common Mistakes section
-                    Patterns → Patterns That Work section
-                    Knowledge → Learnings section
-```
-
-**Each completed task makes the system smarter.**
-
-## License
-
-MIT
+Architecture, design decisions (DD-N), roadmap, and the system-wiring diagram live in [`product/`](./product/). Start with [`product/architecture.md`](./product/architecture.md) and [`product/system-diagram.md`](./product/system-diagram.md).
