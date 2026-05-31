@@ -4,7 +4,7 @@
 
 ## Current State
 
-**10 API route groups** with 7 AI-powered endpoints. **React 19 SPA** on Cloudflare Pages. **Hono + Bun API** on dedicated VM (10.0.110.27). **Capacitor 8** mobile shell with Android + iOS scaffolds. **Gemini 2.5 Flash** for all AI features. **PostgreSQL 16** with 10 user-data tables (+ `_migrations`). **Authentik OIDC** for web auth, **Google Sign-In** for mobile.
+**10 API route groups** with 7 AI-powered endpoints. **React 19 SPA** on Cloudflare Pages. **Hono + Bun API** on dedicated VM (10.0.110.27). **Capacitor 8** mobile shell with Android + iOS scaffolds. **Gemini 2.5 Flash** for all AI features. **PostgreSQL 16** with 10 user-data tables (+ `_migrations`). **Authentik OIDC** for web auth, **Authentik OIDC PKCE** (custom-scheme deep-link) for mobile (Android).
 
 The health tracking platform is live at myluby.net.
 

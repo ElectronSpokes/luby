@@ -167,14 +167,19 @@ All subsequent requests include cookie
 ## Flow 7: Auth (Mobile)
 
 ```
-User taps Sign In with Google
-  |
+User taps Sign In (Android)
+  |  App generates PKCE verifier + challenge (src/lib/native/pkce.ts)
   v
-Google Sign-In SDK (native, via @capgo/capacitor-social-login)
-  |  Returns idToken
+System browser opens Authentik authorize URL
+  |  redirect_uri = net.myluby.app://callback, code_challenge (S256)
+  |  User authenticates in browser
   v
-POST /api/v1/auth/google-signin
-  |  Verify idToken against Google JWKS
+Authentik redirects to net.myluby.app://callback?code=...
+  |  Custom-scheme deep link captured by app (src/hooks/useAuthentikDeepLink.ts)
+  v
+POST /api/v1/auth/mobile-callback  { code, code_verifier }
+  |  Exchange code for tokens (api/src/services/authentik.ts)
+  |  Verify ID token via Authentik JWKS
   |  Lookup/create user in PostgreSQL
   |  Sign HS256 JWT (30-day, SESSION_SECRET from Vault)
   v
@@ -199,7 +204,7 @@ Vault (10.0.25.2:8200, HTTPS)
   v
 Environment populated:
   DATABASE_URL, GEMINI_API_KEY,
-  AUTHENTIK_*, SESSION_SECRET, GOOGLE_CLIENT_ID
+  AUTHENTIK_*, SESSION_SECRET
   |
   |  Fallback to .env values if Vault unreachable
   v
