@@ -129,6 +129,7 @@
 **Rationale:** Capacitor WebView origin varies by platform and build type (`capacitor://localhost` on iOS, `http://localhost` on Android, sometimes `https://localhost` in release builds), and a tightened allowlist would risk locking out a build variant before all origins are catalogued.
 **Status:** Deliberate technical debt — kept open during mobile-first development.
 **Watch for:** Until an explicit allowlist lands, CORS provides no origin-level defence — the auth middleware is the only barrier. Next step: catalogue every Capacitor origin actually used across iOS dev/release and Android dev/release builds, then narrow to that set + the production web origin.
+**Resolved (2026-05-31, S155):** allowlist landed in `api/src/index.ts` — `origin: ALLOWED_ORIGINS`, a closed set: `https://myluby.net`, `https://www.myluby.net`, `https://localhost` (Android native webview — Capacitor 8 default `androidScheme=https`, **corrected from the stale `http://localhost` note**), `capacitor://localhost` (iOS), `http://localhost` (scheme fallback), `http://localhost:3000` + `http://10.0.110.27:3000` (dev). `credentials:true` forbids `*`, so each origin is reflected explicitly. Verified on a throwaway `:3002` instance (live `:3001` untouched): all 7 origins reflected, native preflight (`https://localhost`, POST) passes with credentials, random origin blocked, no-Origin server-to-server unaffected. Takes effect on `luby-api` restart.
 ## DD-17: Google Sign-In on Android excludes GrapheneOS / non-Play-Services devices
 
 **Date:** 2026-05-28
