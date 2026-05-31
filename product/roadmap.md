@@ -17,7 +17,7 @@ The health tracking platform is live at myluby.net.
 **Most pickup-ready next moves**, in order of friction-cost:
 
 1. **Maintenance items** (Maintenance & Watch section below) — small, no external dependencies, can be batched into one PR. Includes Vault-vs-`.env` source-of-truth audit (now with concrete data point from PKCE Wave 6 — luby-api runs env-only despite DD-6 claim).
-2. **P5 expansion** of historical charts beyond the food-only `BarChart` already shipped — purely additive, no new infrastructure.
+2. **P5 expansion** — hydration + movement 7-day charts shipped 2026-05-31 (S155); fasting-history chart + weekly/monthly server-aggregated summaries remain. Purely additive.
 3. **P1 credential acquisition** (Apple Developer + Google Play Console + Firebase) — blocks the rest of P1; need 48k to start these processes externally.
 4. **P4 voice client** — `GET /ai/live-token` server scaffold exists; client-side voice UI is greenfield.
 
@@ -40,8 +40,8 @@ Capacitor 8 scaffolded for both iOS and Android (`ios/` and `android/` directori
 ### Infrastructure (Mar 2026)
 Vault AppRole integration (secrets at `secret/data/luby/api`). Cloudflare Pages auto-deploy via Gitea (now Forgejo) → GitHub mirror. Cloudflare Tunnel for API at `api.myluby.net`. systemd service with security hardening (`ProtectSystem=strict`, `NoNewPrivileges=true`).
 
-### Frontend chart (May 2026 — partial)
-Basic recharts `BarChart` of the last 7 food entries shipped in `App.tsx:536`. First step toward P5 (Data and Insights).
+### Frontend charts (May 2026)
+Recharts `BarChart`s on the dashboard for the last 7 logs of food (Nutrient Balance: protein + fiber), **hydration** (ml/log), and **movement** (min/session) — hydration + movement added 2026-05-31 (S155). Per-log series matching the original food pattern; fasting-history chart + day-aggregation + weekly/monthly summaries remain (P5).
 
 ## What's Next
 
@@ -115,8 +115,8 @@ Basic recharts `BarChart` of the last 7 food entries shipped in `App.tsx:536`. F
 - [ ] Live conversation persistence to `chat_messages`
 
 ### Priority 5: Data and Insights
-- [x] Basic food trend chart (`BarChart`, last 7 entries, in App.tsx) — partial
-- [ ] Expand chart coverage: hydration, movement, fasting completion
+- [x] Basic food trend chart (`BarChart`, last 7 entries, in App.tsx)
+- [x] Expand chart coverage: hydration + movement 7-day `BarChart`s (2026-05-31, S155); fasting-completion chart still pending
 - [ ] Weekly/monthly health summaries (server-aggregated)
 - [ ] Goal setting and tracking (new entity + UI)
 
@@ -146,7 +146,7 @@ Small items with no priority slot. Batchable; pick up alongside any active work.
 | Meal Planning | Live | 7-day AI meal plans with shopping lists |
 | Recipes | Live | AI recipe search and save |
 | Chat | Live | Conversational AI with health context |
-| Charts | Live (partial) | Food-entries `BarChart` shipped; hydration/movement/fasting + weekly/monthly pending |
+| Charts | Live | Food + hydration + movement `BarChart`s shipped; fasting-history + weekly/monthly summaries pending |
 | Mobile App | Live (Android via household F-Droid, release-signed); iOS scaffold present | Capacitor shell, native camera, haptics. Release-signed APK distributed via `https://fdroid.myluby.net/repo`; iOS not yet built |
 
 ## Sources
