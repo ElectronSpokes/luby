@@ -46,6 +46,8 @@
 **Decision:** API loads secrets from Vault via AppRole at startup (DB URL, Gemini key, auth creds). `.env` fallback for local dev only.
 **Rationale:** Avoids env-files-as-source-of-truth drift. Vault path: `secret/data/luby/api`.
 
+**Amendment (2026-05-31, S155 audit):** Operationally luby-api is **`.env`-primary, not Vault-primary**. The systemd unit loads only `EnvironmentFile=/opt/luby/api/.env`, never `config-env/vault.env`, so the AppRole creds are never injected and `loadSecretsFromVault()` short-circuits — logging "No Vault config - using environment variables" at every startup. `.env` holds the live secrets (not dev-only fallbacks). Audit found Vault carried a parallel copy: 5/6 keys identical, but `session_secret` had **drifted** (a wiring-flip to make Vault primary would have silently invalidated every mobile JWT). Resolution: **(a)** ratified env-primary as the operating model for household scope — `.env` is gitignored + root-readable on a single-user VM; **(b)** reconciled Vault `session_secret` to match live `.env` (KV v2 v2). Vault is now a correct **warm standby**, not the live source. To make Vault primary later: add `EnvironmentFile=/opt/luby/config-env/vault.env` to the unit, but re-verify all 6 keys are in sync (esp. `session_secret`) BEFORE restarting or sessions drop. Supersedes the "fallback for local dev only" framing above. (Also closes TD-WAVE6-RE4: no orphan `GOOGLE_CLIENT_ID` remains in Vault.)
+
 ## DD-7: Single migration file for v1
 
 **Date:** 2026-03

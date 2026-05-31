@@ -131,7 +131,7 @@ Small items with no priority slot. Batchable; pick up alongside any active work.
 | Promote `users.email` UNIQUE consideration | DD-15 watch-for | Schema allows duplicate-email rows; matching logic prevents in practice. Decide whether to add `UNIQUE(email)` constraint or document the invariant. |
 | Catalogue Capacitor origins, narrow CORS | DD-16 watch-for | Currently `origin: (origin) => origin`. Catalogue iOS dev/release + Android dev/release origins, then narrow to allowlist + production web origin. |
 | `App.tsx` refactor threshold | DD-8 watch-for | Currently 1082 lines (~54% of 2000-line threshold). No action yet; revisit if it crosses ~1500. |
-| Vault-vs-`.env` source-of-truth audit | DD-6 + systemd config | `luby-api.service` EnvironmentFile is `/opt/luby/api/.env`; verify Vault AppRole is primary path and `.env` only holds bootstrap creds, not the real secrets. |
+| ~~Vault-vs-`.env` source-of-truth audit~~ ✓ | DD-6 + systemd config | **RESOLVED 2026-05-31 (S155):** env-primary confirmed (unit loads only `.env`); DD-6 amended; `session_secret` drift reconciled into Vault (warm standby). See DD-6 amendment. |
 | Root `README.md` is generic template | observed S4 | Root `/opt/luby/README.md` is the generic `northernlights` Claude Code project-setup template (refs `hudson/northernlights` repo, `.claude/` layout), not Luby-specific. Surfaced when RE-4 needed a trivial commit and CHANGELOG.md was seeded instead. Rewrite when next touched — one short Luby-specific intro + pointer to `product/` doc set. |
 
 ## Product Lines
