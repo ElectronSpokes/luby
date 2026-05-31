@@ -1,7 +1,7 @@
 import { Preferences } from '@capacitor/preferences';
 import { isNative } from './platform';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://10.0.110.27:3001';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://10.0.110.27:3001';
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   if (!isNative()) return {};
@@ -37,10 +37,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   // Auth
   getMe: () => request<{ user: { sub: string; email: string; name: string; preferred_username: string } | null }>('/auth/me'),
-  getLoginUrl: (mobile = false) => `${API_URL}/api/v1/auth/login${mobile ? '?mobile=true' : ''}`,
+  getLoginUrl: () => `${API_URL}/api/v1/auth/login`,
   getLogoutUrl: () => `${API_URL}/api/v1/auth/logout`,
-  pollMobileAuth: (sessionId: string) =>
-    request<{ status: string; token?: string; expiresIn?: number }>(`/auth/mobile-poll?session=${sessionId}`),
 
   // Food
   getFood: (from?: number, to?: number) => {

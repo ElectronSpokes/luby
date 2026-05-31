@@ -12,7 +12,6 @@ vi.mock('../../src/config', () => ({
     apiBaseUrl: 'http://test-api',
     frontendUrl: 'http://test-frontend',
     sessionSecret: '',
-    googleClientId: '',
   }),
 }));
 
