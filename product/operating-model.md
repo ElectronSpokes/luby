@@ -1,6 +1,6 @@
 # Luby — Operating Model
 *Maintained by: Cleireach*
-*Last updated: 2026-05-25*
+*Last updated: 2026-06-09 (reviewed; secrets model synced to `.env`-primary per DD-6 amendment)*
 
 ---
 
@@ -30,7 +30,7 @@ cosmogenic.org          <- philosophy
 No Docker on this VM. Pure native: Bun process + system PostgreSQL.
 
 Codebase: `/opt/luby`
-Env: `/opt/luby/api/.env` (gitignored, secrets from Vault at startup via AppRole; `.env` carries the Vault bootstrap creds + dev fallback values)
+Env: `/opt/luby/api/.env` (gitignored, root-readable; **`.env`-primary** — systemd loads only `EnvironmentFile=.env`, which holds the live secrets. Vault is a reconciled warm standby, not the live source — DD-6 amendment 2026-05-31)
 Memory footprint: ~85 MB resident (Bun process)
 Security: `ProtectSystem=strict`, `NoNewPrivileges=true` in systemd unit
 
@@ -57,7 +57,7 @@ Security: `ProtectSystem=strict`, `NoNewPrivileges=true` in systemd unit
 | Host | What Luby uses it for |
 |------|----------------------|
 | Authentik (10.0.25.3) | OIDC login for web users |
-| Vault (10.0.25.2) | All secrets via AppRole auth |
+| Vault (10.0.25.2) | Warm standby for secrets (AppRole); live source is `.env` per DD-6 amendment |
 | Hub (10.0.100.11) | Knowledge network (project registered) |
 | Google Gemini API | All AI features (external, API key in Vault) |
 | Google JWKS | Mobile auth token verification |
@@ -94,7 +94,7 @@ Both paths validate against the same `users` table. Auth middleware chains Authe
 Vault path: `secret/data/luby/api`
 AppRole role ID: `87582477-9ac0-38e4-57b5-212f31c29a5b`
 
-Secrets loaded once at startup via `loadSecretsFromVault()`. Falls back to `.env` if Vault unreachable. To rotate: update Vault secret, restart API service.
+Secrets are **`.env`-primary** (DD-6 amendment 2026-05-31): the systemd unit loads only `EnvironmentFile=/opt/luby/api/.env`, so `loadSecretsFromVault()` short-circuits ("No Vault config — using environment variables") and `.env` holds the live secrets. Vault carries a reconciled warm-standby copy at the path above. To rotate: update `.env`, restart `luby-api`. To make Vault primary later: add `EnvironmentFile=/opt/luby/config-env/vault.env` to the unit, but re-verify all 6 keys (esp. `session_secret`) are in sync first, or mobile JWTs drop.
 
 Secrets managed: `DATABASE_URL`, `GEMINI_API_KEY`, `AUTHENTIK_ISSUER`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`.
 
@@ -112,7 +112,7 @@ None. All AI calls are on-demand and synchronous. No Celery, no cron.
 |---------|----------|
 | AI inference | Google Gemini (external API) |
 | Identity/SSO | Authentik |
-| Secrets | Vault |
+| Secrets | `.env` primary, Vault warm standby (DD-6) |
 | Git repos | Forgejo |
 | DNS/CDN | Cloudflare |
 | Infrastructure | HALINOVA |

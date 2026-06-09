@@ -1,6 +1,6 @@
 # Architecture
 *Maintained by: Ruairidh (CTO) + Cleireach*
-*Last updated: 2026-05-25*
+*Last updated: 2026-06-09 (reviewed; CORS allowlist DD-16 synced — Capacitor 8 already current)*
 
 ## Overview
 
@@ -168,4 +168,4 @@ Single PostgreSQL 16 database on `10.0.110.27:5432`. Schema lives in `api/migrat
 |----------|--------|----|
 | Authentik OIDC + PKCE custom-scheme for native Android mobile sign-in | Single OIDC client extended with `net.myluby.app://callback` redirect URI; replaces Google Sign-In | DD-17 |
 | Email-based user matching legacy carry-over | Pre-DD-17 web flow used `upsertUser()` by `sub`; Google flow used `lookupUserByEmail()` — both consolidated on `upsertUser()` per DD-17 implementation. DD-15's `users.email` non-UNIQUE schema caveat still applies | DD-15 |
-| Open CORS | `origin: (origin) => origin` — tightening deferred until all Capacitor origins catalogued | DD-16 |
+| CORS allowlist | `origin: ALLOWED_ORIGINS` — closed set (myluby.net + native-webview origins: `https://localhost` Android / `capacitor://localhost` iOS); open-reflection removed (DD-16 resolved 2026-05-31, S155) | DD-16 |

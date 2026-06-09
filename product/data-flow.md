@@ -1,6 +1,6 @@
 # Luby — Data Flow
 *Maintained by: Cleireach*
-*Last updated: 2026-05-25*
+*Last updated: 2026-06-09 (reviewed against code through DD-18 — current; P5 hydration/movement charts read the existing food/hydration/movement GET endpoints, no new flow)*
 *Companion to: product/operating-model.md (who runs what), product/architecture.md (system design)*
 
 ---

@@ -1,6 +1,6 @@
 # Standards
 *Maintained by: Ruairidh (CTO)*
-*Last updated: 2026-05-25*
+*Last updated: 2026-06-09 (reviewed against code through DD-18 — current; the 05-31 auth `/simplify` pass was refactor-only, no contract change)*
 
 ## Code Style
 
